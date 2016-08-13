@@ -25,13 +25,10 @@ public:
   explicit scoped_ptr(T* p = NULL): ptr(p) {}
 
   ~scoped_ptr() {
-    typedef char type_must_be_complete[sizeof(T)];
     delete ptr;
   }
 
   void reset(T* p = NULL) {
-    typedef char type_must_be_complete[sizeof(T)];
-
     if (ptr != p) {
       T* obj = ptr;
       ptr = p;
@@ -99,13 +96,10 @@ public:
   explicit scoped_array(T* p = NULL) : ptr(p) {}
 
   ~scoped_array() {
-    typedef char type_must_be_complete[sizeof(T)];
     delete[] ptr;
   }
 
   void reset(T* p = NULL) {
-    typedef char type_must_be_complete[sizeof(T)];
-
     if (ptr != p) {
       T* arr = ptr;
       ptr = p;

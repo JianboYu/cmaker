@@ -1,3 +1,4 @@
+#include <os_log.h>
 #include <os_mutex_posix.h>
 
 namespace os {
@@ -7,7 +8,6 @@ MutexPosix::MutexPosix() {
   (void) pthread_mutexattr_init(&attr);
   (void) pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
   (void) pthread_mutex_init(&_mutex, &attr);
-
 }
 
 MutexPosix::~MutexPosix() {

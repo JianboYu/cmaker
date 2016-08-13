@@ -1,6 +1,7 @@
 #ifndef _OS_ASSERT_H_
 #define _OS_ASSERT_H_
 
+#include <os_typedefs.h>
 #include <os_log.h>
 
 namespace os {
@@ -13,6 +14,12 @@ std::string* MakeCheckOpString(const t1& v1, const t2& v2, const char* names) {
   return msg;
 }
 
+#define CHECK(condition)                                                      \
+  if (!condition) {                                                           \
+    os::FatalLog(__FILE__, __LINE__).stream()                                 \
+      << "Check failed--\"" #condition "\"--" << std::endl;                   \
+  }
+
 #define DEFINE_CHECK_OP_IMPL(name, op)                                        \
   template <class t1, class t2>                                               \
   inline std::string* Check##name##Impl(const t1& v1, const t2& v2,           \
@@ -20,10 +27,6 @@ std::string* MakeCheckOpString(const t1& v1, const t2& v2, const char* names) {
     if (v1 op v2) return NULL;                                                \
     else return os::MakeCheckOpString(v1, v2, names);                         \
   }                                                                           \
-  inline std::string* Check##name##Impl(int v1, int v2, const char* names) {  \
-    if (v1 op v2) return NULL;                                                \
-    else return os::MakeCheckOpString(v1, v2, names);                         \
-  }
 
 DEFINE_CHECK_OP_IMPL(EQ, ==)
 DEFINE_CHECK_OP_IMPL(NE, !=)

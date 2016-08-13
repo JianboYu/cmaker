@@ -92,8 +92,8 @@ static void dump_backtrace() {
         log_error("backtrace", "%2d: ", i);
         int status;
         size_t length;
-        char* demangled = abi::__cxa_demangle(mangled, NULL, &length, &status);
-        log_error("backtrace", "%s\n", demangled != NULL ? demangled : mangled);
+        char* demangled = abi::__cxa_demangle(mangled, (char *)NULL, &length, &status);
+        log_error("backtrace", "%s\n", demangled != (char *)NULL ? demangled : mangled);
         free(demangled);
       } else {
         // If parsing failed, at least print the unparsed symbol.
