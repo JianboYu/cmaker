@@ -2,9 +2,14 @@
 #define _UTILITY_MEMORY_H_
 
 #include <os_atomic.h>
+#include <os_mutex.h>
 #include <core_ref.h>
+#include <core_scoped_ptr.h>
 
 namespace utility {
+
+using namespace os;
+using namespace core;
 
 enum IMemoryType {
   eMemoryTypeNormal = 0,
@@ -23,7 +28,7 @@ class IMemoryObserver {
 public:
   virtual ~IMemoryObserver() {}
 
-  void signal_memory_release(IMemory *memory) = 0;
+  virtual void signal_memory_release(IMemory *memory) = 0;
 private:
   IMemoryObserver(const IMemoryObserver &);
   IMemoryObserver & operator=(const IMemoryObserver&);
@@ -33,14 +38,23 @@ class IMemory : public IRefBase {
 private:
   Atomic _refs;
   IMemoryObserver *_obs;
+  int32_t _type;
+  uint32_t _usage;
+  uint8_t *_mem;
+  uint32_t _size;
+  uint8_t *_mem_internal;
+  scoped_ptr<Mutex> _mutex;
 public:
-  IMemory(uint8_t *addr, uint32_t size, int32_t type, uint32_t usage = 0);
-  virtual ~IMemory() {}
+  IMemory(int32_t type, uint32_t usage = 0);
+  virtual ~IMemory();
 
-  virtual uint8_t * ptr() = 0;
-  virtual uint32_t size() const = 0;
+  virtual bool allocate(uint8_t *addr, uint32_t size);
+  virtual void deallocate();
 
-  virtual int32_t type() const = 0;
+  virtual uint8_t * ptr();
+  virtual uint32_t size() const;
+
+  virtual int32_t type() const;
   virtual uint8_t *attribute(int32_t & size) { return NULL;}
 
   // IRefBase cls
@@ -52,31 +66,44 @@ public:
 
 class VideoMemory : public IMemory {
 private:
+  uint32_t _w;
+  uint32_t _h;
+  int32_t _fmt;
+  uint32_t _w_stride;
+  uint32_t _h_stride;
+  uint32_t _strided_size;
   int32_t _timestamp;
   int64_t _dts;
   int64_t _pts;
 public:
   VideoMemory(uint32_t w,
               uint32_t h,
-              int32_t fmt,
+              int32_t fmt = eVCFormatI420,
               uint32_t w_stride = 0,
               uint32_t h_stride = 0);
   virtual ~VideoMemory();
 
-  uint32_t width() const;
-  uint32_t height() const;
-  uint32_t wstride() const;
-  uint32_t hstride() const;
-  int32_t  format() const;
+  virtual bool allocate(uint8_t *addr, uint32_t size);
+  virtual void deallocate();
 
-  uint8_t *memory(int32_t plane);
+  virtual uint32_t width() const;
+  virtual uint32_t height() const;
+  virtual uint32_t wstride() const;
+  virtual uint32_t hstride() const;
+  virtual int32_t  format() const;
 
-  int32_t timestamp() const;
-  int64_t dts() const;
-  int64_t pts() const;
-  int32_t set_timestamp(int32_t ts);
-  int64_t set_dts(int64_t dts);
-  int64_t set_pts(int64_t pts);
+  virtual uint8_t *memory(int32_t plane);
+
+  virtual int32_t timestamp() const;
+  virtual int64_t dts() const;
+  virtual int64_t pts() const;
+  virtual int32_t set_timestamp(int32_t ts);
+  virtual int64_t set_dts(int64_t dts);
+  virtual int64_t set_pts(int64_t pts);
+private:
+  int32_t calc_size(uint32_t w, uint32_t h,
+                    int32_t fmt,
+                    uint32_t w_stride, uint32_t h_stride);
 };
 
 class MemoryPool {

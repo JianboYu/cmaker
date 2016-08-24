@@ -1,3 +1,4 @@
+#include <string.h>
 #include <os_typedefs.h>
 #include <os_mutex.h>
 #include <os_assert.h>
@@ -5,9 +6,11 @@
 #include <os_time.h>
 #include <core_scoped_ptr.h>
 #include <utility_buffer_queue.h>
+#include <utility_memory.h>
 
 using namespace os;
 using namespace core;
+using namespace utility;
 
 bool wr_loop(void *ctx) {
   static int32_t s_times = 0;
@@ -61,6 +64,23 @@ int32_t bq_main(int32_t argc, char *argv[]) {
   CHECK_EQ(0, buffer_queue_destory(bq));
 }
 
+int32_t memory_main(int32_t argc, char *argv[]) {
+  bool b_ret = false;
+  scoped_ptr<IMemory> pmem(new IMemory(eVCFormatI420, 0));
+  b_ret = pmem->allocate(NULL, 128);
+  CHECK_EQ(true, b_ret);
+  log_verbose("tag" , "allocate 128 bytes success!\n");
+  pmem->deallocate();
+  scoped_ptr<VideoMemory> pvideo_mem(new VideoMemory(1920, 1080));
+  b_ret = pvideo_mem->allocate(NULL, 0);
+  CHECK_EQ(true, b_ret);
+  log_verbose("tag" , "allocate 1080p video memory success!\n");
+  memset(pvideo_mem->memory(0), 0xaa, 1920*1080);
+  pvideo_mem->deallocate();
+  return 0;
+}
+
 int32_t main(int32_t argc, char *argv[]) {
-  return bq_main(argc, argv);
+  //return bq_main(argc, argv);
+  return memory_main(argc, argv);
 }
