@@ -20,6 +20,9 @@ bool loop(void *ctx) {
   return true;
 }
 
+static const int64_t kNumMillisecsPerSec = INT64_C(1000);
+static const int64_t kNumMicrosecsPerSec = INT64_C(1000000);
+static const int64_t kNumNanosecsPerSec = INT64_C(1000000000);
 int32_t main(int32_t argc, char *argv[]) {
   int a __attribute__((__unused__)) = 5;
   {

@@ -14,7 +14,16 @@
 #endif
 
 // basic typedefs
-#if defined(_OS_LINUX)
+#if defined(_OS_ANDROID)
+  // for andorid compile error ‘INT64_C’ was not declared in this scope
+  #ifdef __cplusplus
+    #define __STDC_CONSTANT_MACROS
+    #ifdef _STDINT_H
+      #undef _STDINT_H
+    #endif
+    # include <stdint.h>
+  #endif
+#elif defined(_OS_LINUX)
   #include <stdint.h>
 #elif defined(_OS_WINDOWS) && defined(_MSC_VER)
   // Define C99 equivalent types.
