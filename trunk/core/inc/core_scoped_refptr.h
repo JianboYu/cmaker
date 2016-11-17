@@ -3,6 +3,10 @@
 
 namespace core {
 
+#ifndef NULL
+#define NULL (0)
+#endif
+
 template <class T>
 class scoped_refptr {
  public:

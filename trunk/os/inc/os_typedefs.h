@@ -59,4 +59,6 @@ enum OS_ERROR {
 //_OS_CLOCK_REALTIME
 //_OS_CLOCK__MONOTONIC
 
+#define GUARDED_BY(x)
+
 #endif //_OS_TYPEDEFS_H_
