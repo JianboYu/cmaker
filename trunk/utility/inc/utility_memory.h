@@ -106,19 +106,23 @@ private:
                     uint32_t w_stride, uint32_t h_stride);
 };
 
-class MemoryPool {
+class IMemoryPool {
 public:
-  static MemoryPool *Create();
-  virtual ~MemoryPool() {}
+  static IMemoryPool *Create();
+  virtual ~IMemoryPool() {}
 
-  virtual int32_t create_slot(int32_t *slot, int32_t size, int32_t usage) = 0;
+  virtual int32_t create_slot(int32_t *slot, int32_t size,
+                              int32_t usage, int32_t max_num = 20) = 0;
   virtual int32_t create_slot(int32_t *slot, int32_t w, int32_t h,
                               int32_t w_stride, int32_t h_stride,
-                              int32_t color_fmt) = 0;
+                              int32_t color_fmt, int32_t usage,
+                              int32_t max_num = 20) = 0;
   virtual int32_t destroy_slot(int32_t slot) = 0;
 
   virtual IMemory *get(int32_t slot) = 0;
-  virtual void dump() = 0;
+  virtual int32_t put(int32_t slot, const IMemory *mem) = 0;
+
+  virtual void dump() {};
 };
 
 } //namespace utility

@@ -62,6 +62,7 @@ int32_t bq_main(int32_t argc, char *argv[]) {
   }
 
   CHECK_EQ(0, buffer_queue_destory(bq));
+  return 0;
 }
 
 int32_t memory_main(int32_t argc, char *argv[]) {
