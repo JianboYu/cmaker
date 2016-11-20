@@ -81,7 +81,52 @@ int32_t memory_main(int32_t argc, char *argv[]) {
   return 0;
 }
 
+int32_t memory_pool_main(int32_t argc, char *argv[]) {
+  int32_t usage = 0x13;
+  scoped_ptr<IMemoryPool> pPool(IMemoryPool::Create());
+  int32_t slot[6] = {-1, -1, -1, -1, -1, -1};
+
+  log_verbose("tag" , "MemoryPool: %p\n", pPool.get());
+  for (int32_t i = 0; i < 3; ++i) {
+    CHECK_EQ(0, pPool->create_slot(&slot[i*2],  128 * 64 * i + 128,
+                        usage, 2 * i + 2));
+    log_verbose("tag" , "slot[%d]: %d created\n", i*2, slot[i*2]);
+    CHECK_EQ(0, pPool->create_slot(&slot[i*2 + 1], 1920, 1080, 0, 0,
+                              eVCFormatI420, usage,
+                              4 * i + 2));
+    log_verbose("tag" , "slot[%d]: %d created\n", i*2+1, slot[i*2+1]);
+  }
+
+  IMemory *pMem = pPool->get(slot[0]);
+  log_verbose("tag" , "get pMem: %p\n", pMem);
+  CHECK_EQ(0, pPool->put(slot[0], pMem));
+  log_verbose("tag" , "put pMem: %p\n", pMem);
+  pMem = pPool->get(slot[0]);
+  log_verbose("tag" , "get pMem: %p\n", pMem);
+  CHECK(pMem->ptr());
+  CHECK_EQ(pMem->size(), 128);
+
+  CHECK_EQ(0, pPool->put(slot[0], pMem));
+  log_verbose("tag" , "put pMem: %p\n", pMem);
+
+  IMemory *pMemVideo = pPool->get(slot[1]);
+  log_verbose("tag" , "get video pMem: %p\n", pMemVideo);
+  CHECK_EQ(0, pPool->put(slot[1], pMemVideo));
+  pMemVideo = pPool->get(slot[1]);
+  log_verbose("tag" , "get video pMem: %p\n", pMemVideo);
+  CHECK(pMemVideo->ptr());
+  CHECK_EQ(pMemVideo->size(), 3110400);
+  CHECK_EQ(0, pPool->put(slot[1], pMemVideo));
+
+  for (int32_t i = 0; i < 6; ++i) {
+    CHECK_EQ(0, pPool->destroy_slot(slot[i]));
+  }
+  log_verbose("tag" , "MemPool test pass!!\n");
+  return 0;
+}
+
 int32_t main(int32_t argc, char *argv[]) {
   //return bq_main(argc, argv);
-  return memory_main(argc, argv);
+  //return memory_main(argc, argv);
+  return memory_pool_main(argc, argv);
 }

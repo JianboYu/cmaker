@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <map>
+#include <list>
 #include <os_mutex.h>
 #include <utility_bitmap.h>
 #include <utility_memory.h>
@@ -30,11 +31,13 @@ private:
       }audio;
     }u;
     std::vector<IMemory*> mem;
+    std::list<IMemory*> mem_used;
+    std::list<IMemory*> mem_free;
     scoped_ptr<Mutex> mutex;
     int32_t max_size;
     int32_t actual_size;
   };
-  std::map<int32_t, MemorySlot> _slots;
+  std::map<int32_t, MemorySlot*> _slots;
   uint32_t _slot_ids;
   hbitmap _slot_bm;
   scoped_ptr<Mutex> _mutex;

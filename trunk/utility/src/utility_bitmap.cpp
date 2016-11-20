@@ -72,7 +72,7 @@ public:
   }
 };
 
-
+extern "C" {
 hbitmap bitmap_create(uint32_t bits) {
   return (hbitmap)(new BitsMap(bits));
 }
@@ -112,5 +112,6 @@ int32_t bitmap_is_clear(hbitmap bm) {
     return -1;
   return pBM->is_clear();
 }
+} //extern "C"
 
 } //namespace utility
