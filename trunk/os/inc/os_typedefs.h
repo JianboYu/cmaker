@@ -61,4 +61,8 @@ enum OS_ERROR {
 
 #define GUARDED_BY(x)
 
+#ifndef NULL
+#define NULL (0)
+#endif
+
 #endif //_OS_TYPEDEFS_H_
