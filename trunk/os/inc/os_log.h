@@ -39,6 +39,14 @@ extern void log_warn(const char *tag, const char *fmt, ...);
 extern void log_error(const char *tag, const char *fmt, ...);
 extern void log_trace(int32_t level, const char *tag, const char *fmt, ...);
 
+#ifndef LOGTAG
+#define LOGTAG "Tag"
+#endif
+#define logv(fmt, ...) log_verbose(LOGTAG, fmt, ##__VA_ARGS__)
+#define logi(fmt, ...) log_info(LOGTAG, fmt, ##__VA_ARGS__)
+#define logw(fmt, ...) log_warn(LOGTAG, fmt, ##__VA_ARGS__)
+#define loge(fmt, ...) log_error(LOGTAG, fmt, ##__VA_ARGS__)
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
