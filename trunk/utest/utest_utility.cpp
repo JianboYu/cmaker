@@ -6,6 +6,7 @@
 #include <os_time.h>
 #include <core_scoped_ptr.h>
 #include <utility_buffer_queue.h>
+#include <utility_circle_queue.h>
 #include <utility_memory.h>
 
 using namespace os;
@@ -45,7 +46,6 @@ bool rd_loop(void *ctx) {
   return true;
 }
 
-
 int32_t bq_main(int32_t argc, char *argv[]) {
   buffer_queue_handle bq;
   void *array_ptr[5] = {(void*)0x11,(void*)0x12,(void*)0x13,(void*)0x14,(void*)0x15};
@@ -62,6 +62,49 @@ int32_t bq_main(int32_t argc, char *argv[]) {
   }
 
   CHECK_EQ(0, buffer_queue_destory(bq));
+  return 0;
+}
+
+bool cq_wr_loop(void *ctx) {
+  static void *array_ptr[5] = {(void*)0x11,(void*)0x12,(void*)0x13,(void*)0x14,(void*)0x15};
+  static int32_t s_times = 0;
+  cirq_handle cq = static_cast<cirq_handle>(ctx);
+  if (0 != cirq_enqueue(cq, array_ptr[s_times % 5])){
+    return true;
+  }
+
+  os_msleep(40);
+  log_verbose("tag" , "cq wr data: %d\n", array_ptr[s_times % 5]);
+  ++s_times;
+  return true;
+}
+
+bool cq_rd_loop(void *ctx) {
+  cirq_handle cq = static_cast<cirq_handle>(ctx);
+  int32_t *data = NULL;
+  if (0 != cirq_dequeue(cq, (void**)&data)){
+    return true;
+  }
+  os_msleep(40);
+  log_verbose("tag" , "\t\tcq rd data: %d\n", data);
+  return true;
+}
+
+int32_t cq_main(int32_t argc, char *argv[]) {
+  cirq_handle cq;
+  CHECK_EQ(0, cirq_create(&cq, 5));
+
+  scoped_ptr<Thread> wr_thread(Thread::Create(cq_rd_loop, cq));
+  scoped_ptr<Thread> rd_thread(Thread::Create(cq_wr_loop, cq));
+  uint32_t tid = 0;
+  wr_thread->start(tid);
+  rd_thread->start(tid);
+
+  while(1) {
+    os_msleep(1000);
+  }
+
+  CHECK_EQ(0, cirq_destory(cq));
   return 0;
 }
 
@@ -125,8 +168,31 @@ int32_t memory_pool_main(int32_t argc, char *argv[]) {
   return 0;
 }
 
+static void usage() {
+  logv("Usage:\n");
+  logv("./utest_utility fun_name [options]\n");
+  logv("fun_name as following:\n");
+  logv("1. cq\t\tcircle queue\n");
+  logv("2. bq\t\tbuffer queue\n");
+  logv("3. mem\t\tmemory\n");
+  logv("4. mempool\tmemory pool\n");
+}
+
 int32_t main(int32_t argc, char *argv[]) {
-  //return bq_main(argc, argv);
-  //return memory_main(argc, argv);
-  return memory_pool_main(argc, argv);
+  if (argc < 2) {
+    usage();
+    exit(0);
+  }
+  if (!strcmp(argv[1], "cq")) {
+    return cq_main(argc-2, &argv[2]);
+  } else if (!strcmp(argv[1], "bq")) {
+    return bq_main(argc-2, &argv[2]);
+  } else if (!strcmp(argv[1], "mem")) {
+    return memory_main(argc-2, &argv[2]);
+  } else if (!strcmp(argv[1], "mempool")) {
+    return memory_pool_main(argc-2, &argv[2]);
+  } else {
+    usage();
+  }
+  return 0;
 }
