@@ -1,0 +1,36 @@
+AUX_SOURCE_DIRECTORY(./libAACdec/src aacdec_src)
+AUX_SOURCE_DIRECTORY(./libAACenc/src aacenc_src)
+AUX_SOURCE_DIRECTORY(./libPCMutils/src pcmuitls_src)
+AUX_SOURCE_DIRECTORY(./libFDK/src fdk_src)
+AUX_SOURCE_DIRECTORY(./libSYS/src sys_src)
+AUX_SOURCE_DIRECTORY(./libMpegTPDec/src mpegtpdec_src)
+AUX_SOURCE_DIRECTORY(./libMpegTPEnc/src mpegtpenc_src)
+AUX_SOURCE_DIRECTORY(./libSBRdec/src sbrdec_src)
+AUX_SOURCE_DIRECTORY(./libSBRenc/src sbrenc_src)
+
+INCLUDE_DIRECTORIES("./libAACdec/include"
+                    "./libAACenc/include"
+                    "./libPCMutils/include"
+                    "./libFDK/include"
+                    "./libSYS/include"
+                    "./libMpegTPDec/include"
+                    "./libMpegTPEnc/include"
+                    "./libSBRdec/include"
+                    "./libSBRenc/include"
+                    )
+
+ADD_LIBRARY(libFraunhoferAAC STATIC ${aacdec_src}
+            ${aacenc_src}
+            ${pcmuitls_src}
+            ${fdk_src}
+            ${sys_src}
+            ${mpegtpdec_src}
+            ${mpegtpenc_src}
+            ${sbrdec_src}
+            ${sbrenc_src}
+           ) 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PRJ_CXX_FLAGS} --std=c++98 -Wno-error")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} -Wno-sequence-point -Wno-extra -Wno-error")
+MESSAGE(INFO " libFraunhoferAAC CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+MESSAGE(INFO " libFraunhoferAAC CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+SET_TARGET_PROPERTIES(libFraunhoferAAC PROPERTIES OUTPUT_NAME "FraunhoferAAC")
