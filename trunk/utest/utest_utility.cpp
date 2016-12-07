@@ -8,6 +8,8 @@
 #include <utility_buffer_queue.h>
 #include <utility_circle_queue.h>
 #include <utility_memory.h>
+#include <utility_byteorder.h>
+#include <utility_common.h>
 
 using namespace os;
 using namespace core;
@@ -168,6 +170,20 @@ int32_t memory_pool_main(int32_t argc, char *argv[]) {
   return 0;
 }
 
+int32_t miscs_main(int32_t argc, char *argv[]) {
+  logv("IsBigEndian: %d\n", is_host_big_endian());
+  int32_t arInt[15];
+  logv("arInt size: %d\n", ARRARY_SIZE(arInt));
+
+  int32_t val = 213;
+  logv("val:%d celing16: %d\n", val, CELING16(val));
+  logv("val:%d celing32: %d\n", val, CELING32(val));
+  logv("val:%d celing128: %d\n", val, CELING(val, 128));
+  logv("val:%d align16: %d\n", val, ALIGN16(val));
+  logv("val:%d align32: %d\n", val, ALIGN32(val));
+  logv("val:%d align128: %d\n", val, ALIGN(val, 128));
+  return 0;
+}
 static void usage() {
   logv("Usage:\n");
   logv("./utest_utility fun_name [options]\n");
@@ -176,6 +192,7 @@ static void usage() {
   logv("2. bq\t\tbuffer queue\n");
   logv("3. mem\t\tmemory\n");
   logv("4. mempool\tmemory pool\n");
+  logv("5. misc\t\tother\n");
 }
 
 int32_t main(int32_t argc, char *argv[]) {
@@ -191,6 +208,8 @@ int32_t main(int32_t argc, char *argv[]) {
     return memory_main(argc-2, &argv[2]);
   } else if (!strcmp(argv[1], "mempool")) {
     return memory_pool_main(argc-2, &argv[2]);
+  } else if (!strcmp(argv[1], "misc")) {
+    return miscs_main(argc-2, &argv[2]);
   } else {
     usage();
   }
