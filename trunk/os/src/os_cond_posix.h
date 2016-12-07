@@ -6,6 +6,9 @@ namespace os {
 class CondPosix : public Cond {
 private:
   pthread_cond_t _cond;
+#ifndef _OS_CLOCK_REALTIME
+  pthread_condattr_t _attr;
+#endif
 public:
   CondPosix();
   virtual ~CondPosix();

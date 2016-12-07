@@ -118,5 +118,9 @@ int32_t main(int32_t argc, char *argv[]) {
                                          transport_feedback_observer.get()));
 
 
+  CHECK_EQ(0, rtcp_sender->SendRTCP(feedback_state, kRtcpRr));
+  CHECK_EQ(0, rtcp_sender->SendRTCP(feedback_state, kRtcpSr));
+  CHECK_EQ(0, rtcp_sender->SendRTCP(feedback_state, kRtcpSr));
+  CHECK_EQ(0, rtcp_sender->SendRTCP(feedback_state, kRtcpSr));
   return 0;
 }

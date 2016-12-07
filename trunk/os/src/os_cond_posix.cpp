@@ -13,18 +13,19 @@ CondPosix::CondPosix() {
   ret = pthread_cond_init(&_cond, NULL);
   CHECK_EQ(0, ret);
 #else
-  pthread_condattr_t condAttr;
-  ret = pthread_condattr_init(&condAttr);
+  ret = pthread_condattr_init(&_attr);
   CHECK_EQ(0, ret);
-  ret = pthread_condattr_setclock(&condAttr, CLOCK_MONOTONIC);
+  ret = pthread_condattr_setclock(&_attr, CLOCK_MONOTONIC);
   CHECK_EQ(0, ret);
-  ret = pthread_cond_init(&_cond, &condAttr);
-  CHECK_EQ(0, ret);
-  ret = pthread_condattr_destroy(&condAttr);
+  ret = pthread_cond_init(&_cond, &_attr);
   CHECK_EQ(0, ret);
 #endif
 }
 CondPosix::~CondPosix() {
+#ifndef _OS_CLOCK_REALTIME
+  pthread_condattr_destroy(&_attr);
+#endif
+
   pthread_cond_destroy(&_cond);
 }
 void CondPosix::wait(Mutex *mut) {

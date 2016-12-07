@@ -4,13 +4,13 @@
 namespace os {
 
 MutexPosix::MutexPosix() {
-  pthread_mutexattr_t attr;
-  (void) pthread_mutexattr_init(&attr);
-  (void) pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-  (void) pthread_mutex_init(&_mutex, &attr);
+  (void) pthread_mutexattr_init(&_attr);
+  (void) pthread_mutexattr_settype(&_attr, PTHREAD_MUTEX_RECURSIVE);
+  (void) pthread_mutex_init(&_mutex, &_attr);
 }
 
 MutexPosix::~MutexPosix() {
+  (void) pthread_mutexattr_destroy(&_attr);
   (void) pthread_mutex_destroy(&_mutex);
 }
 
