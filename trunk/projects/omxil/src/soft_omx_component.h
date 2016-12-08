@@ -1,6 +1,7 @@
 #ifndef SOFT_OMX_COMPONENT_H_
 #define SOFT_OMX_COMPONENT_H_
 
+#include <string>
 #include <core_constructor.h>
 #include <OMX_Component.h>
 
@@ -12,8 +13,8 @@ public:
                    const OMX_CALLBACKTYPE *callbacks,
                    OMX_PTR appData,
                    OMX_COMPONENTTYPE **component);
-protected:
   virtual ~SoftOMXComponent();
+protected:
 
   const char *name() const;
 

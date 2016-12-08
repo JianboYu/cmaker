@@ -20,7 +20,7 @@ public:
             const OMX_CALLBACKTYPE *callbacks,
             OMX_PTR appData,
             OMX_COMPONENTTYPE **component);
-
+    virtual ~SimpleSoftOMXComponent() {}
     void onMessageReceived();
 
 protected:

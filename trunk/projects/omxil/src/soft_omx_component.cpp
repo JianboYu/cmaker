@@ -15,7 +15,7 @@ SoftOMXComponent::SoftOMXComponent(
     mComponent->nVersion.s.nVersionMinor = 0;
     mComponent->nVersion.s.nRevision = 0;
     mComponent->nVersion.s.nStep = 0;
-    mComponent->pComponentPrivate = this;
+    //mComponent->pComponentPrivate = this;
     mComponent->pApplicationPrivate = appData;
 
     mComponent->GetComponentVersion = NULL;

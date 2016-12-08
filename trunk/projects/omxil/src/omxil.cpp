@@ -2,6 +2,7 @@
 #include <os_typedefs.h>
 #include <os_mutex.h>
 #include <OMX_Core.h>
+#include <soft_avc_enc.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -67,12 +68,32 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
                                     OMX_IN  OMX_STRING cComponentName,
                                     OMX_IN  OMX_PTR pAppData,
                                     OMX_IN  OMX_CALLBACKTYPE* pCallBacks) {
+  os::AutoLock lock(gs_mutex);
+  OMX_COMPONENTTYPE *pComponent = NULL;
+  if (!strncmp(cComponentName, "OMX.omxil.h264.encoder", 22)) {
+    omxil::SoftOMXComponent *pSoftOMXCom = new omxil::SoftAVC(cComponentName,
+                                                pCallBacks,
+                                                pAppData,
+                                                &pComponent);
+    if (!pSoftOMXCom)
+      return OMX_ErrorInsufficientResources;
+    pComponent->pComponentPrivate = pSoftOMXCom;
+    *pHandle = (OMX_HANDLETYPE)pComponent;
+    return OMX_ErrorNone;
+  }
   return OMX_ErrorNotImplemented;
 }
 
 OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_FreeHandle(
                                     OMX_IN  OMX_HANDLETYPE hComponent) {
-  return OMX_ErrorNotImplemented;
+  os::AutoLock lock(gs_mutex);
+  OMX_COMPONENTTYPE *pComponent = (OMX_COMPONENTTYPE*)hComponent;
+  omxil::SoftOMXComponent *pSoftOMXCom =
+        static_cast<omxil::SoftOMXComponent*>(pComponent->pComponentPrivate);
+  if (!pSoftOMXCom)
+    return OMX_ErrorBadParameter;
+  delete pSoftOMXCom;
+  return OMX_ErrorNone;
 }
 
 OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_SetupTunnel(
