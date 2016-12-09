@@ -1,4 +1,5 @@
 #include <string>
+#include <os_log.h>
 #include "soft_omx_component.h"
 namespace omxil {
 
@@ -52,6 +53,7 @@ const char *SoftOMXComponent::name() const {
 void SoftOMXComponent::notify(
         OMX_EVENTTYPE event,
         OMX_U32 data1, OMX_U32 data2, OMX_PTR data) {
+
     (*mCallbacks->EventHandler)(
             mComponent,
             mComponent->pApplicationPrivate,

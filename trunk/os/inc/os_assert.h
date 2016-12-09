@@ -15,7 +15,7 @@ std::string* MakeCheckOpString(const t1& v1, const t2& v2, const char* names) {
 }
 
 #define CHECK(condition)                                                      \
-  if (!condition) {                                                           \
+  if (!(condition)) {                                                           \
     os::FatalLog(__FILE__, __LINE__).stream()                                 \
       << "Check failed--\"" #condition "\"--" << std::endl;                   \
   }
@@ -24,7 +24,7 @@ std::string* MakeCheckOpString(const t1& v1, const t2& v2, const char* names) {
   template <class t1, class t2>                                               \
   inline std::string* Check##name##Impl(const t1& v1, const t2& v2,           \
                                         const char* names) {                  \
-    if (v1 op v2) return NULL;                                                \
+    if ((v1) op (v2)) return NULL;                                                \
     else return os::MakeCheckOpString(v1, v2, names);                         \
   }                                                                           \
 

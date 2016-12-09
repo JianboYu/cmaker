@@ -20,7 +20,7 @@ public:
             const OMX_CALLBACKTYPE *callbacks,
             OMX_PTR appData,
             OMX_COMPONENTTYPE **component);
-    virtual ~SimpleSoftOMXComponent() {}
+    virtual ~SimpleSoftOMXComponent();
     void onMessageReceived();
 
 protected:
@@ -84,6 +84,8 @@ private:
 
     static bool MsgThread(void *ctx);
     bool MsgThread();
+    uint32_t mMsgThreadTid;
+    bool mMsgStarted;
 
     OMX_STATETYPE mState;
     OMX_STATETYPE mTargetState;

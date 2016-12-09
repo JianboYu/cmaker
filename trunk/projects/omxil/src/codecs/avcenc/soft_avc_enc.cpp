@@ -109,7 +109,7 @@ static int32_t ConvertOmxAvcLevelToAvcSpecLevel(
         }
     }
 
-    loge("ConvertOmxAvcLevelToAvcSpecLevel: %d level not supported",
+    loge("ConvertOmxAvcLevelToAvcSpecLevel: %d level not supported\n",
             (int32_t)omxLevel);
 
     return -1;
@@ -124,7 +124,7 @@ static int32_t ConvertAvcSpecLevelToOmxAvcLevel(
         }
     }
 
-    loge("ConvertAvcSpecLevelToOmxAvcLevel: %d level not supported",
+    loge("ConvertAvcSpecLevelToOmxAvcLevel: %d level not supported\n",
             (int32_t)avcLevel);
 
     return -1;
@@ -587,9 +587,9 @@ void SoftAVC::logVersion() {
     status = ive_api_function(mCodecCtx, (void *) &s_ctl_ip, (void *) &s_ctl_op);
 
     if (status != IV_SUCCESS) {
-        loge("Error in getting version: 0x%x", s_ctl_op.u4_error_code);
+        loge("Error in getting version: 0x%x\n", s_ctl_op.u4_error_code);
     } else {
-        logv("Ittiam encoder version: %s", (char *)s_ctl_ip.pu1_version);
+        logv("Ittiam encoder version: %s\n", (char *)s_ctl_ip.pu1_version);
     }
     return;
 }
@@ -620,16 +620,16 @@ OMX_ERRORTYPE SoftAVC::initEncoder() {
     switch (mColorFormat) {
         case OMX_COLOR_FormatYUV420SemiPlanar:
             mIvVideoColorFormat = IV_YUV_420SP_UV;
-            logv("colorFormat YUV_420SP");
+            logv("colorFormat YUV_420SP\n");
             break;
         default:
         case OMX_COLOR_FormatYUV420Planar:
             mIvVideoColorFormat = IV_YUV_420P;
-            logv("colorFormat YUV_420P");
+            logv("colorFormat YUV_420P\n");
             break;
     }
 
-    logv("Params width %d height %d level %d colorFormat %d", mWidth,
+    logv("Params width %d height %d level %d colorFormat %d\n", mWidth,
             mHeight, mAVCEncLevel, mIvVideoColorFormat);
 
     /* Getting Number of MemRecords */
@@ -655,12 +655,12 @@ OMX_ERRORTYPE SoftAVC::initEncoder() {
 
     /* Allocate array to hold memory records */
     if (mNumMemRecords > SIZE_MAX / sizeof(iv_mem_rec_t)) {
-        loge("requested memory size is too big.");
+        loge("requested memory size is too big.\n");
         return OMX_ErrorUndefined;
     }
     mMemRecords = (iv_mem_rec_t *)malloc(mNumMemRecords * sizeof(iv_mem_rec_t));
     if (NULL == mMemRecords) {
-        loge("Unable to allocate memory for hold memory records: Size %zu",
+        loge("Unable to allocate memory for hold memory records: Size %zu\n",
                 mNumMemRecords * sizeof(iv_mem_rec_t));
         mSignalledError = true;
         notify(OMX_EventError, OMX_ErrorUndefined, 0, 0);
@@ -829,7 +829,7 @@ OMX_ERRORTYPE SoftAVC::initEncoder() {
     /* Video control Set in Encode header mode */
     setEncMode(IVE_ENC_MODE_HEADER);
 
-    logv("init_codec successfull");
+    logv("init_codec successfull\n");
 
     mSpsPpsHeaderReceived = false;
     mStarted = true;
@@ -962,7 +962,7 @@ OMX_ERRORTYPE SoftAVC::internalGetParameter(OMX_INDEXTYPE index, OMX_PTR params)
                   (OMX_VIDEO_PARAM_PROFILELEVELTYPE *) params;
 
             if (profileLevel->nPortIndex != kOutputPortIndex) {
-                loge("Invalid port index: %u", profileLevel->nPortIndex);
+                loge("Invalid port index: %u\n", profileLevel->nPortIndex);
                 return OMX_ErrorUnsupportedIndex;
             }
 
@@ -1070,7 +1070,7 @@ OMX_ERRORTYPE SoftAVC::internalSetParameter(OMX_INDEXTYPE index, const OMX_PTR p
                     updatePortParams();
                     return OMX_ErrorNone;
                 } else {
-                    loge("Unsupported color format %i", format->eColorFormat);
+                    loge("Unsupported color format %i\n", format->eColorFormat);
                     return OMX_ErrorUnsupportedSetting;
                 }
             } else if (format->nPortIndex == kOutputPortIndex) {
@@ -1259,6 +1259,7 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
 }
 
 void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
+    logv("onQueueFilled in...\n");
     IV_STATUS_T status;
     WORD32 timeDelay, timeTaken;
 
@@ -1267,7 +1268,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
     // Initialize encoder if not already initialized
     if (mCodecCtx == NULL) {
         if (OMX_ErrorNone != initEncoder()) {
-            loge("Failed to initialize encoder");
+            loge("Failed to initialize encoder\n");
             notify(OMX_EventError, OMX_ErrorUndefined, 0 /* arg2 */, NULL /* data */);
             return;
         }
@@ -1389,6 +1390,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
         /* Compute time elapsed between end of previous decode()
          * to start of current decode() */
         TIME_DIFF(mTimeEnd, mTimeStart, timeDelay);
+        //TODO: Crash here for X86_64
         status = ive_api_function(mCodecCtx, &s_encode_ip, &s_encode_op);
 
         if (IV_SUCCESS != status) {
@@ -1403,7 +1405,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
         /* Compute time taken for decode() */
         TIME_DIFF(mTimeStart, mTimeEnd, timeTaken);
 
-        logv("timeTaken=%6d delay=%6d numBytes=%6d", timeTaken, timeDelay,
+        logv("timeTaken=%6d delay=%6d numBytes=%6d\n", timeTaken, timeDelay,
                 s_encode_op.s_out_buf.u4_bytes);
 
         /* In encoder frees up an input buffer, mark it as free */

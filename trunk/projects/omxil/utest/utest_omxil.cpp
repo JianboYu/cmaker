@@ -8,6 +8,8 @@
 #include <os_assert.h>
 #include <os_log.h>
 #include <os_time.h>
+#include <os_thread.h>
+#include <utility_circle_queue.h>
 #include <core_scoped_ptr.h>
 #include <OMX_Core.h>
 #include <OMX_Component.h>
@@ -27,6 +29,16 @@ static void InitOMXParams(T *params) {
   params->nVersion.s.nStep = 0;
 }
 
+typedef struct OMXContext {
+  OMX_HANDLETYPE hComponent;
+  OMX_BUFFERHEADERTYPE *inBuffer[2];
+  OMX_BUFFERHEADERTYPE *outBuffer[2];
+  cirq_handle fbd;
+  cirq_handle ebd;
+  os::Thread *thread;
+  OMX_TICKS  ts;
+}OMXContext;
+
 OMX_ERRORTYPE sEventHandler(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
@@ -41,15 +53,57 @@ OMX_ERRORTYPE sEmptyBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("EmptyBufferDone com: %p appdata: %p\n");
+    logv("EmptyBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    OMXContext *omx_ctx = (OMXContext *)pAppData;
+    int32_t status = cirq_enqueue(omx_ctx->ebd, pBuffer);
+    CHECK_EQ(0, status);
+
     return OMX_ErrorNone;
 }
 OMX_ERRORTYPE sFillBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("FillBufferDone com: %p appdata: %p\n");
+    logv("FillBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    OMXContext *omx_ctx = (OMXContext *)pAppData;
+    int32_t status = cirq_enqueue(omx_ctx->fbd, pBuffer);
+    CHECK_EQ(0, status);
     return OMX_ErrorNone;
+}
+
+bool thread_loop(void *ctx) {
+  logv("thread_loop in....\n");
+  OMX_ERRORTYPE oRet = OMX_ErrorNone;
+  OMXContext *omx_ctx = (OMXContext *)ctx;
+
+  OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
+  void *pdata = NULL;
+  cirq_dequeue(omx_ctx->fbd, &pdata);
+  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  if (pBuffer) {
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+  pdata = NULL;
+  cirq_dequeue(omx_ctx->ebd, &pdata);
+  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+
+  if (pBuffer) {
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 1280*720*3 >> 2;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = omx_ctx->ts;
+    oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    omx_ctx->ts += 3600;
+  }
+  os_msleep(3000);
+  logv("thread_loop out....\n");
+  return true;
 }
 
 void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
@@ -84,6 +138,16 @@ int32_t main(int argc, char *argv[]) {
 
     log_verbose("tag", "Component[%d]: %s \n", i + 1, comp_name.get());
   }
+  OMXContext *omx_ctx = (OMXContext*)malloc(sizeof(OMXContext));
+  CHECK(omx_ctx);
+  int32_t status = -1;
+  status = cirq_create(&omx_ctx->fbd, 2);
+  CHECK_EQ(0, status);
+  status = cirq_create(&omx_ctx->ebd, 2);
+  CHECK_EQ(0, status);
+  omx_ctx->thread = os::Thread::Create(thread_loop, omx_ctx);
+  omx_ctx->ts = 3600;
+
   OMX_CALLBACKTYPE omx_cb;
   omx_cb.EventHandler = sEventHandler;
   omx_cb.FillBufferDone = sFillBufferDone;
@@ -91,9 +155,10 @@ int32_t main(int argc, char *argv[]) {
   OMX_HANDLETYPE pHandle;
   oRet = OMX_GetHandle(&pHandle,
     (OMX_STRING)"OMX.omxil.h264.encoder",
-    (OMX_PTR)NULL,
+    (OMX_PTR)omx_ctx,
     &omx_cb);
   CHECK_EQ(oRet, OMX_ErrorNone);
+  omx_ctx->hComponent = pHandle;
 
   OMX_PARAM_PORTDEFINITIONTYPE def;
   InitOMXParams(&def);
@@ -128,10 +193,78 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 2);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    CHECK(omx_ctx->inBuffer[i]);
+  }
+
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 2);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    CHECK(omx_ctx->outBuffer[i]);
+  }
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_BUFFERHEADERTYPE* pBuffer = NULL;
+  for (int32_t i = 0; i < 2; ++i) {
+    pBuffer = omx_ctx->inBuffer[i];
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 1280*720*3 >> 2;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = omx_ctx->ts;
+    oRet = OMX_EmptyThisBuffer(pHandle, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    omx_ctx->ts += 3600;
+  }
+
+  for (int32_t i = 0; i < 2; ++i) {
+    pBuffer = omx_ctx->outBuffer[i];
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(pHandle, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+
+  uint32_t tid = 0;
+  omx_ctx->thread->start(tid);
+  os_sleep(1000);
+
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_FreeBuffer(pHandle, 0, omx_ctx->inBuffer[i]);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_FreeBuffer(pHandle, 1, omx_ctx->outBuffer[i]);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateLoaded, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+
   oRet = OMX_FreeHandle(pHandle);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   oRet = OMX_Deinit();
   CHECK_EQ(oRet, OMX_ErrorNone);
+
+  omx_ctx->thread->stop();
+  delete omx_ctx->thread;
+  status = cirq_destory(omx_ctx->fbd);
+  CHECK_EQ(0, status);
+  status = cirq_destory(omx_ctx->ebd);
+  CHECK_EQ(0, status);
+
+  free(omx_ctx);
   return 0;
 }

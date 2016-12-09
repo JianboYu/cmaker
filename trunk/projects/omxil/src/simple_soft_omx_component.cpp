@@ -25,12 +25,18 @@ SimpleSoftOMXComponent::SimpleSoftOMXComponent(
   mMsgLock.reset(Mutex::Create());
   mMsgCond.reset(Cond::Create());
   mMsgThread.reset(Thread::Create(MsgThread, this));
+  mMsgStarted = mMsgThread->start(mMsgThreadTid);
+}
+
+SimpleSoftOMXComponent::~SimpleSoftOMXComponent() {
+  if (mMsgStarted) {
+    mMsgThread->stop();
+    mMsgStarted = false;
+  }
 }
 
 OMX_ERRORTYPE SimpleSoftOMXComponent::sendCommand(
         OMX_COMMANDTYPE cmd, OMX_U32 param, OMX_PTR data) {
-    CHECK(data);
-
     AutoLock lock(mMsgLock.get());
     MessageInfo msg;
     msg.type = MessageInfo::kWhatSendCommand;
@@ -199,7 +205,8 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::useBuffer(
     buffer.mHeader = *header;
     buffer.mOwnedByUs = false;
     port->mBuffers.push_back(buffer);
-
+    logi("Port[%d] buffer count: %d port need actual: %d\n", portIndex,
+          port->mBuffers.size(), port->mDef.nBufferCountActual);
     if (port->mBuffers.size() == port->mDef.nBufferCountActual) {
         port->mDef.bPopulated = OMX_TRUE;
         checkTransitions();
@@ -225,7 +232,7 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::allocateBuffer(
         return err;
     }
 
-    CHECK((*header)->pPlatformPrivate);
+    CHECK(!(*header)->pPlatformPrivate);
     (*header)->pPlatformPrivate = ptr;
 
     return OMX_ErrorNone;
@@ -311,11 +318,11 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::getState(OMX_STATETYPE *state) {
 }
 
 void SimpleSoftOMXComponent::onMessageReceived() {
-    CHECK_LT(mMsg.size(), 0);
+    CHECK_GT(mMsg.size(), 0);
     MessageInfo msg = mMsg.front();
     mMsg.pop_front();
 
-    logv("msgType = %d", msg.type);
+    logv("msgType = %d\n", msg.type);
     switch (msg.type) {
         case MessageInfo::kWhatSendCommand:
         {
@@ -397,13 +404,13 @@ void SimpleSoftOMXComponent::onSendCommand(
 void SimpleSoftOMXComponent::onChangeState(OMX_STATETYPE state) {
     // We shouldn't be in a state transition already.
     CHECK_EQ((int)mState, (int)mTargetState);
-
+    logv("onChangeState new state: %d\n", state);
     switch (mState) {
         case OMX_StateLoaded:
             CHECK_EQ((int)state, (int)OMX_StateIdle);
             break;
         case OMX_StateIdle:
-            CHECK(state == OMX_StateLoaded || state == OMX_StateExecuting);
+            CHECK((state == OMX_StateLoaded) || (state == OMX_StateExecuting));
             break;
         case OMX_StateExecuting:
         {
@@ -516,6 +523,7 @@ void SimpleSoftOMXComponent::onPortFlush(
 }
 
 void SimpleSoftOMXComponent::checkTransitions() {
+    logv("mState: %d mTargetState: %d\n", mState, mTargetState);
     if (mState != mTargetState) {
         bool transitionComplete = true;
 
@@ -575,7 +583,7 @@ void SimpleSoftOMXComponent::checkTransitions() {
 
         if (port->mTransition == PortInfo::DISABLING) {
             if (port->mBuffers.empty()) {
-                logv("Port %d now disabled.", i);
+                logv("Port %d now disabled.\n", i);
 
                 port->mTransition = PortInfo::NONE;
                 notify(OMX_EventCmdComplete, OMX_CommandPortDisable, i, NULL);
@@ -584,7 +592,7 @@ void SimpleSoftOMXComponent::checkTransitions() {
             }
         } else if (port->mTransition == PortInfo::ENABLING) {
             if (port->mDef.bPopulated == OMX_TRUE) {
-                logv("Port %d now enabled.", i);
+                logv("Port %d now enabled.\n", i);
 
                 port->mTransition = PortInfo::NONE;
                 port->mDef.bEnabled = OMX_TRUE;
