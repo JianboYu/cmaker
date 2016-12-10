@@ -193,8 +193,8 @@ void  SoftAVC::initEncParams() {
     mReconEnable = DEFAULT_RECON_ENABLE;
     mEntropyMode = DEFAULT_ENTROPY_MODE;
     mBframes = DEFAULT_B_FRAMES;
-    mWidth = 352;
-    mHeight = 288;
+    mWidth = 1280;
+    mHeight = 720;
     mBitrate = 19200;
     mFramerate = 30 << 16;
     mColorFormat = OMX_COLOR_FormatYUV420Planar;
@@ -1298,6 +1298,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
             inputBufferInfo = *inQueue.begin();
             inputBufferHeader = inputBufferInfo->mHeader;
         } else {
+            logv("inQueue empty!!!!!\n");
             return;
         }
 
@@ -1373,6 +1374,16 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
                 }
             }
         }
+        logv("inputBufferHeader: %p\n", inputBufferHeader);
+        logv("inputBufferHeader->buffer: %p\n", inputBufferHeader->pBuffer);
+        logv("inputBufferHeader->filledLen: %d\n", inputBufferHeader->nFilledLen);
+        logv("inputBufferHeader->allocLen: %d\n", inputBufferHeader->nAllocLen);
+
+        logv("outputBufferHeader: %p\n", outputBufferHeader);
+        logv("outputBufferHeader->buffer: %p\n", outputBufferHeader->pBuffer);
+        logv("outputBufferHeader->len: %d\n", outputBufferHeader->nFilledLen);
+        logv("outputBufferHeader->allocLen: %d\n", outputBufferHeader->nAllocLen);
+
         error = setEncodeArgs(
                 &s_encode_ip, &s_encode_op, inputBufferHeader, outputBufferHeader);
 
@@ -1386,12 +1397,16 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
                 mInFile, s_encode_ip.s_inp_buf.apv_bufs[0],
                 (mHeight * mStride * 3 / 2));
 
+
+        logv("input addr: %p\n", s_encode_ip.s_inp_buf.apv_bufs[0]);
         mTimeStart = os_get_systime();
         /* Compute time elapsed between end of previous decode()
          * to start of current decode() */
         TIME_DIFF(mTimeEnd, mTimeStart, timeDelay);
         //TODO: Crash here for X86_64
+        logv("line: %d\n", __LINE__);
         status = ive_api_function(mCodecCtx, &s_encode_ip, &s_encode_op);
+        logv("line: %d\n", __LINE__);
 
         if (IV_SUCCESS != status) {
             loge("Encode Frame failed = 0x%x\n",

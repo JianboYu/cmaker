@@ -339,6 +339,7 @@ void SimpleSoftOMXComponent::onMessageReceived() {
             bool found = false;
             size_t portIndex = (MessageInfo::kWhatEmptyThisBuffer == msg.type)?
                     header->nInputPortIndex: header->nOutputPortIndex;
+            logv("Message: %d ----> port: %d\n", msg.type, portIndex);
             PortInfo *port = &mPorts.at(portIndex);
 
             for (size_t j = 0; j < port->mBuffers.size(); ++j) {
@@ -356,6 +357,8 @@ void SimpleSoftOMXComponent::onMessageReceived() {
                     }
 
                     port->mQueue.push_back(buffer);
+                    logv("portIndex: %d buffer->mHeader: %p pBuffer: %p mQueue size: %d\n",
+                          portIndex, buffer->mHeader, buffer->mHeader->pBuffer, port->mQueue.size());
                     onQueueFilled(portIndex);
 
                     found = true;

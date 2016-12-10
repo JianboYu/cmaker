@@ -78,20 +78,8 @@ bool thread_loop(void *ctx) {
 
   OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
   void *pdata = NULL;
-  cirq_dequeue(omx_ctx->fbd, &pdata);
-  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-  if (pBuffer) {
-    pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 0;
-    pBuffer->nOffset = 0;
-    pBuffer->nTimeStamp = 0;
-    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
-    CHECK_EQ(oRet, OMX_ErrorNone);
-  }
-  pdata = NULL;
   cirq_dequeue(omx_ctx->ebd, &pdata);
-  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-
+  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 1280*720*3 >> 2;
@@ -100,6 +88,18 @@ bool thread_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     omx_ctx->ts += 3600;
+  }
+
+  pdata = NULL;
+  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  cirq_dequeue(omx_ctx->fbd, &pdata);
+  if (pBuffer) {
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
   }
   os_msleep(3000);
   logv("thread_loop out....\n");
@@ -200,12 +200,16 @@ int32_t main(int argc, char *argv[]) {
     oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 2);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->inBuffer[i]);
+    logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
+        0, i, omx_ctx->inBuffer[i]->pBuffer, omx_ctx->inBuffer[i]->nFilledLen);
   }
 
   for (int32_t i = 0; i < 2; ++i) {
     oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 2);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->outBuffer[i]);
+    logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
+        1, i, omx_ctx->outBuffer[i]->pBuffer, omx_ctx->outBuffer[i]->nFilledLen);
   }
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
