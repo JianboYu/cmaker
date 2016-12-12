@@ -149,10 +149,7 @@ SoftAVC::SoftAVC(
       mSignalledError(false),
       mCodecCtx(NULL) {
 
-    initPorts(kNumBuffers, kNumBuffers, ((mWidth * mHeight * 3) >> 1),
-            MEDIA_MIMETYPE_VIDEO_AVC, 2);
-
-    // If dump is enabled, then open create an empty file
+        // If dump is enabled, then open create an empty file
     GENERATE_FILE_NAMES();
     CREATE_DUMP_FILE(mInFile);
     CREATE_DUMP_FILE(mOutFile);
@@ -160,6 +157,7 @@ SoftAVC::SoftAVC(
     memset(mInputBufferInfo, 0, sizeof(mInputBufferInfo));
 
     initEncParams();
+    initPorts(kNumBuffers, kNumBuffers, ((mWidth * mHeight * 3) >> 1));
 }
 
 SoftAVC::~SoftAVC() {
@@ -1259,7 +1257,6 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
 }
 
 void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
-    logv("onQueueFilled in...\n");
     IV_STATUS_T status;
     WORD32 timeDelay, timeTaken;
 
@@ -1311,8 +1308,6 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
         if (inputBufferHeader != NULL) {
             outputBufferHeader->nFlags = inputBufferHeader->nFlags;
         }
-
-        //uint8_t *outPtr = (uint8_t *)outputBufferHeader->pBuffer;
 
         if (!mSpsPpsHeaderReceived) {
             error = setEncodeArgs(&s_encode_ip, &s_encode_op, NULL, outputBufferHeader);
@@ -1374,15 +1369,6 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
                 }
             }
         }
-        logv("inputBufferHeader: %p\n", inputBufferHeader);
-        logv("inputBufferHeader->buffer: %p\n", inputBufferHeader->pBuffer);
-        logv("inputBufferHeader->filledLen: %d\n", inputBufferHeader->nFilledLen);
-        logv("inputBufferHeader->allocLen: %d\n", inputBufferHeader->nAllocLen);
-
-        logv("outputBufferHeader: %p\n", outputBufferHeader);
-        logv("outputBufferHeader->buffer: %p\n", outputBufferHeader->pBuffer);
-        logv("outputBufferHeader->len: %d\n", outputBufferHeader->nFilledLen);
-        logv("outputBufferHeader->allocLen: %d\n", outputBufferHeader->nAllocLen);
 
         error = setEncodeArgs(
                 &s_encode_ip, &s_encode_op, inputBufferHeader, outputBufferHeader);
@@ -1398,15 +1384,11 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
                 (mHeight * mStride * 3 / 2));
 
 
-        logv("input addr: %p\n", s_encode_ip.s_inp_buf.apv_bufs[0]);
         mTimeStart = os_get_systime();
         /* Compute time elapsed between end of previous decode()
          * to start of current decode() */
         TIME_DIFF(mTimeEnd, mTimeStart, timeDelay);
-        //TODO: Crash here for X86_64
-        logv("line: %d\n", __LINE__);
         status = ive_api_function(mCodecCtx, &s_encode_ip, &s_encode_op);
-        logv("line: %d\n", __LINE__);
 
         if (IV_SUCCESS != status) {
             loge("Encode Frame failed = 0x%x\n",
@@ -1478,12 +1460,11 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
 }
 
 void SoftAVC::initPorts(
-        OMX_U32 numInputBuffers, OMX_U32 numOutputBuffers, OMX_U32 outputBufferSize,
-        const char *mime, OMX_U32 minCompressionRatio) {
+        OMX_U32 numInputBuffers, OMX_U32 numOutputBuffers, OMX_U32 outputBufferSize) {
     OMX_PARAM_PORTDEFINITIONTYPE def;
 
     mMinOutputBufferSize = outputBufferSize;
-    mMinCompressionRatio = minCompressionRatio;
+    mMinCompressionRatio = 2;
 
     InitOMXParams(&def);
 
@@ -1532,7 +1513,6 @@ void SoftAVC::initPorts(
     def.format.video.xFramerate = 0 << 16;
     def.format.video.bFlagErrorConcealment = OMX_FALSE;
     def.nBufferAlignment = kOutputBufferAlignment;
-    //def.format.video.cMIMEType = const_cast<char *>(mime);
     def.format.video.eCompressionFormat = mCodingType;
     def.format.video.eColorFormat = OMX_COLOR_FormatUnused;
     def.format.video.pNativeWindow = NULL;

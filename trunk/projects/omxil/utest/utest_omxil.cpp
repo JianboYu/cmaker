@@ -72,7 +72,7 @@ OMX_ERRORTYPE sFillBufferDone(
 }
 
 bool thread_loop(void *ctx) {
-  logv("thread_loop in....\n");
+  logv("thread_loop ....\n");
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   OMXContext *omx_ctx = (OMXContext *)ctx;
 
@@ -82,27 +82,28 @@ bool thread_loop(void *ctx) {
   OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 1280*720*3 >> 2;
+    pBuffer->nFilledLen = 1280*720*3 >> 1;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = omx_ctx->ts;
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
+    logv("EmptyThisBuffer: %p\n", pBuffer);
     omx_ctx->ts += 3600;
   }
 
   pdata = NULL;
-  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   cirq_dequeue(omx_ctx->fbd, &pdata);
+  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 0;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
+    logv("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(3000);
-  logv("thread_loop out....\n");
+  os_msleep(40);
   return true;
 }
 
@@ -197,7 +198,7 @@ int32_t main(int argc, char *argv[]) {
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   for (int32_t i = 0; i < 2; ++i) {
-    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 2);
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 1);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->inBuffer[i]);
     logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
@@ -205,7 +206,7 @@ int32_t main(int argc, char *argv[]) {
   }
 
   for (int32_t i = 0; i < 2; ++i) {
-    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 2);
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 1);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->outBuffer[i]);
     logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
@@ -218,7 +219,7 @@ int32_t main(int argc, char *argv[]) {
   for (int32_t i = 0; i < 2; ++i) {
     pBuffer = omx_ctx->inBuffer[i];
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 1280*720*3 >> 2;
+    pBuffer->nFilledLen = 1280*720*3 >> 1;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = omx_ctx->ts;
     oRet = OMX_EmptyThisBuffer(pHandle, pBuffer);

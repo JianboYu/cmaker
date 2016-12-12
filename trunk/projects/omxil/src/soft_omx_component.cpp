@@ -171,7 +171,6 @@ OMX_ERRORTYPE SoftOMXComponent::AllocateBufferWrapper(
     SoftOMXComponent *me =
         (SoftOMXComponent *)
             ((OMX_COMPONENTTYPE *)component)->pComponentPrivate;
-
     return me->allocateBuffer(buffer, portIndex, appPrivate, size);
 }
 

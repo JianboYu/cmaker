@@ -234,9 +234,7 @@ private:
     void initPorts(
         OMX_U32 numInputBuffers,
         OMX_U32 numOutputBuffers,
-        OMX_U32 outputBufferSize,
-        const char *mime,
-        OMX_U32 minCompressionRatio);
+        OMX_U32 outputBufferSize);
 
     void updatePortParams();
     enum {
@@ -262,30 +260,30 @@ private:
 
 #ifdef FILE_DUMP_ENABLE
 
-#define INPUT_DUMP_PATH     "/sdcard/media/avce_input"
+#define INPUT_DUMP_PATH     "./avce_input"
 #define INPUT_DUMP_EXT      "yuv"
-#define OUTPUT_DUMP_PATH    "/sdcard/media/avce_output"
+#define OUTPUT_DUMP_PATH    "./avce_output"
 #define OUTPUT_DUMP_EXT     "h264"
 
 #define GENERATE_FILE_NAMES() {                         \
-    GETTIME(&mTimeStart, NULL);                         \
+    mTimeStart = os_get_systime();                      \
     strcpy(mInFile, "");                                \
-    sprintf(mInFile, "%s_%lld.%s", INPUT_DUMP_PATH,     \
-            mTimeStart                                  \
+    sprintf(mInFile, "%s_%lu.%s", INPUT_DUMP_PATH,     \
+            mTimeStart,                                 \
             INPUT_DUMP_EXT);                            \
     strcpy(mOutFile, "");                               \
-    sprintf(mOutFile, "%s_%ld.%ld.%s", OUTPUT_DUMP_PATH,\
-            mTimeStart                                  \
+    sprintf(mOutFile, "%s_%ld.%s", OUTPUT_DUMP_PATH,\
+            mTimeStart,                                 \
             OUTPUT_DUMP_EXT);                           \
 }
 
 #define CREATE_DUMP_FILE(m_filename) {                  \
     FILE *fp = fopen(m_filename, "wb");                 \
     if (fp != NULL) {                                   \
-        ALOGD("Opened file %s", m_filename);            \
+        logv("Opened file %s\n", m_filename);            \
         fclose(fp);                                     \
     } else {                                            \
-        ALOGD("Could not open file %s", m_filename);    \
+        logv("Could not open file %s\n", m_filename);    \
     }                                                   \
 }
 #define DUMP_TO_FILE(m_filename, m_buf, m_size)         \
@@ -294,14 +292,14 @@ private:
     if (fp != NULL && m_buf != NULL) {                  \
         int i;                                          \
         i = fwrite(m_buf, 1, m_size, fp);               \
-        ALOGD("fwrite ret %d to write %d", i, m_size);  \
+        logv("fwrite ret %d to write %d\n", i, m_size); \
         if (i != (int)m_size) {                         \
-            ALOGD("Error in fwrite, returned %d", i);   \
-            perror("Error in write to file");           \
+            logv("Error in fwrite, returned %d\n", i);  \
+            perror("Error in write to file\n");           \
         }                                               \
         fclose(fp);                                     \
     } else {                                            \
-        ALOGD("Could not write to file %s", m_filename);\
+        logv("Could not write to file %s\n", m_filename);\
         if (fp != NULL)                                 \
             fclose(fp);                                 \
     }                                                   \
