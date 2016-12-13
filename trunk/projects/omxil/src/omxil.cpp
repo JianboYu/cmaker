@@ -70,18 +70,33 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
                                     OMX_IN  OMX_CALLBACKTYPE* pCallBacks) {
   os::AutoLock lock(gs_mutex);
   OMX_COMPONENTTYPE *pComponent = NULL;
+  omxil::SoftOMXComponent *pSoftOMXCom = NULL;
   if (!strncmp(cComponentName, "OMX.omxil.h264.encoder", 22)) {
-    omxil::SoftOMXComponent *pSoftOMXCom = new omxil::SoftAVC(cComponentName,
-                                                pCallBacks,
-                                                pAppData,
-                                                &pComponent);
+    pSoftOMXCom = new omxil::SoftAVC(cComponentName,
+                                     pCallBacks,
+                                     pAppData,
+                                     &pComponent);
     if (!pSoftOMXCom)
       return OMX_ErrorInsufficientResources;
     pComponent->pComponentPrivate = pSoftOMXCom;
     *pHandle = (OMX_HANDLETYPE)pComponent;
     return OMX_ErrorNone;
+  } else if (!strncmp(cComponentName, "OMX.omxil.h264.decoder", 22)) {
+    #if 0
+    pSoftOMXCom = new omxil::SoftAVCDec(cComponentName,
+                                        pCallBacks,
+                                        pAppData,
+                                        &pComponent);
+    if (!pSoftOMXCom)
+      return OMX_ErrorInsufficientResources;
+    pComponent->pComponentPrivate = pSoftOMXCom;
+    *pHandle = (OMX_HANDLETYPE)pComponent;
+    return OMX_ErrorNone;
+    #endif
+    return OMX_ErrorNotImplemented;
+  } else {
+    return OMX_ErrorNotImplemented;
   }
-  return OMX_ErrorNotImplemented;
 }
 
 OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_FreeHandle(

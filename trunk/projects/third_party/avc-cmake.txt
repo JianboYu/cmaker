@@ -137,4 +137,84 @@ MESSAGE(INFO " libavcenc CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 MESSAGE(INFO " libavcenc CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 SET_TARGET_PROPERTIES(libavcenc PROPERTIES OUTPUT_NAME "avcenc")
 
+SET(avcd_src_c
+    "common/ih264_buf_mgr.c"
+    "common/ih264_disp_mgr.c"
+    "common/ih264_inter_pred_filters.c"
+    "common/ih264_luma_intra_pred_filters.c"
+    "common/ih264_chroma_intra_pred_filters.c"
+    "common/ih264_padding.c"
+    "common/ih264_mem_fns.c"
+    "common/ih264_deblk_edge_filters.c"
+    "common/ih264_iquant_itrans_recon.c"
+    "common/ih264_ihadamard_scaling.c"
+    "common/ih264_weighted_pred.c"
+    "common/ithread.c"
+    "decoder/ih264d_cabac.c"
+    "decoder/ih264d_parse_mb_header.c"
+    "decoder/ih264d_parse_cabac.c"
+    "decoder/ih264d_process_intra_mb.c"
+    "decoder/ih264d_inter_pred.c"
+    "decoder/ih264d_parse_bslice.c"
+    "decoder/ih264d_parse_pslice.c"
+    "decoder/ih264d_parse_islice.c"
+    "decoder/ih264d_cabac_init_tables.c"
+    "decoder/ih264d_bitstrm.c"
+    "decoder/ih264d_compute_bs.c"
+    "decoder/ih264d_deblocking.c"
+    "decoder/ih264d_parse_headers.c"
+    "decoder/ih264d_mb_utils.c"
+    "decoder/ih264d_mvpred.c"
+    "decoder/ih264d_utils.c"
+    "decoder/ih264d_process_bslice.c"
+    "decoder/ih264d_process_pslice.c"
+    "decoder/ih264d_parse_slice.c"
+    "decoder/ih264d_quant_scaling.c"
+    "decoder/ih264d_parse_cavlc.c"
+    "decoder/ih264d_dpb_mgr.c"
+    "decoder/ih264d_nal.c"
+    "decoder/ih264d_sei.c"
+    "decoder/ih264d_tables.c"
+    "decoder/ih264d_vui.c"
+    "decoder/ih264d_format_conv.c"
+    "decoder/ih264d_thread_parse_decode.c"
+    "decoder/ih264d_api.c"
+    "decoder/ih264d_thread_compute_bs.c"
+    "decoder/ih264d_function_selector_generic.c")
+
+if (ARCH_x86_64)
+  SET(ARCH_CFLAGS "-DX86 -msse4.2 -DDEFAULT_ARCH=D_ARCH_X86_SSE42")
+  SET(ARCH "x86")
+
+  SET(avcd_src_arch_c
+      "decoder/x86/ih264d_function_selector.c"
+      "decoder/x86/ih264d_function_selector_sse42.c"
+      "decoder/x86/ih264d_function_selector_ssse3.c"
+      "common/x86/ih264_inter_pred_filters_ssse3.c"
+      "common/x86/ih264_deblk_luma_ssse3.c"
+      "common/x86/ih264_deblk_chroma_ssse3.c"
+      "common/x86/ih264_padding_ssse3.c"
+      "common/x86/ih264_mem_fns_ssse3.c"
+      "common/x86/ih264_iquant_itrans_recon_dc_ssse3.c"
+      "common/x86/ih264_iquant_itrans_recon_ssse3.c"
+      "common/x86/ih264_luma_intra_pred_filters_ssse3.c"
+      "common/x86/ih264_chroma_intra_pred_filters_ssse3.c"
+      "common/x86/ih264_iquant_itrans_recon_sse42.c"
+      "common/x86/ih264_weighted_pred_sse42.c"
+      "common/x86/ih264_ihadamard_scaling_sse42.c")
+elseif(ARCH_arm)
+endif()
+
+INCLUDE_DIRECTORIES(./decoder/ ./common ./decoder/${ARCH}/ ./common/${ARCH}/)
+MESSAGE(INFO " libavcdec ARCH_INCLUDES: ${ARCH_INCLUDES}")
+MESSAGE(INFO " libavcdec ASM_COMPILER: ${CMAKE_ASM_COMPILER}")
+MESSAGE(INFO " libavcdec ASM_EXTENSIONS: ${CMAKE_ASM_SOURCE_FILE_EXTENSIONS}")
+
+ADD_LIBRARY(libavcdec STATIC ${avcd_src_c} ${avcd_src_arch_c} ${avcd_src_arch_asm})
+
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} ${ARCH_CFLAGS} -fPIC -O3 -Wno-error")
+MESSAGE(INFO " libavcdec CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+MESSAGE(INFO " libavcdec CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
+SET_TARGET_PROPERTIES(libavcdec PROPERTIES OUTPUT_NAME "avcdec")
+
 ADD_SUBDIRECTORY(test)

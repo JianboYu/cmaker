@@ -88,9 +88,6 @@ namespace omxil {
 /** Used to remove warnings about unused parameters */
 #define UNUSED(x) ((void)(x))
 
-/** Get time */
-#define GETTIME(a, b) gettimeofday(a, b);
-
 /** Compute difference between start and end */
 #define TIME_DIFF(start, end, diff) \
     diff = (end - start)
