@@ -6,8 +6,8 @@
 #include <utility_common.h>
 #include "simple_soft_omx_component.h"
 #include "ih264_typedefs.h"
-#include "iv2.h"
-#include "ive2.h"
+
+//#define EFILE_DUMP_ENABLE
 
 namespace omxil {
 
@@ -29,15 +29,15 @@ namespace omxil {
 #define DEFAULT_NUM_CORES           1
 #define DEFAULT_NUM_CORES_PRE_ENC   0
 #define DEFAULT_FPS                 30
-#define DEFAULT_ENC_SPEED           IVE_NORMAL
+#define DEFAULT_ENC_SPEED           2 //IVE_NORMAL
 
 #define DEFAULT_MEM_REC_CNT         0
 #define DEFAULT_RECON_ENABLE        0
 #define DEFAULT_CHKSUM_ENABLE       0
 #define DEFAULT_START_FRM           0
 #define DEFAULT_NUM_FRMS            0xFFFFFFFF
-#define DEFAULT_INP_COLOR_FORMAT       IV_YUV_420SP_VU
-#define DEFAULT_RECON_COLOR_FORMAT     IV_YUV_420P
+#define DEFAULT_INP_COLOR_FORMAT    0x02//IV_YUV_420SP_VU
+#define DEFAULT_RECON_COLOR_FORMAT  0x0//IV_YUV_420P
 #define DEFAULT_LOOPBACK            0
 #define DEFAULT_SRC_FRAME_RATE      30
 #define DEFAULT_TGT_FRAME_RATE      30
@@ -51,7 +51,7 @@ namespace omxil {
 #define DEFAULT_ME_SPEED            100
 #define DEFAULT_ENABLE_FAST_SAD     0
 #define DEFAULT_ENABLE_ALT_REF      0
-#define DEFAULT_RC_MODE             IVE_RC_STORAGE
+#define DEFAULT_RC_MODE             0x1//IVE_RC_STORAGE
 #define DEFAULT_BITRATE             6000000
 #define DEFAULT_I_QP                22
 #define DEFAULT_I_QP_MAX            DEFAULT_QP_MAX
@@ -62,7 +62,7 @@ namespace omxil {
 #define DEFAULT_B_QP                22
 #define DEFAULT_B_QP_MAX            DEFAULT_QP_MAX
 #define DEFAULT_B_QP_MIN            DEFAULT_QP_MIN
-#define DEFAULT_AIR                 IVE_AIR_MODE_NONE
+#define DEFAULT_AIR                 0x0//IVE_AIR_MODE_NONE
 #define DEFAULT_AIR_REFRESH_PERIOD  30
 #define DEFAULT_SRCH_RNG_X          64
 #define DEFAULT_SRCH_RNG_Y          48
@@ -73,12 +73,12 @@ namespace omxil {
 #define DEFAULT_HPEL                1
 #define DEFAULT_QPEL                1
 #define DEFAULT_I4                  1
-#define DEFAULT_EPROFILE            IV_PROFILE_BASE
+#define DEFAULT_EPROFILE            0x0//IV_PROFILE_BASE
 #define DEFAULT_ENTROPY_MODE        0
-#define DEFAULT_SLICE_MODE          IVE_SLICE_MODE_NONE
+#define DEFAULT_SLICE_MODE          0x0//IVE_SLICE_MODE_NONE
 #define DEFAULT_SLICE_PARAM         256
-#define DEFAULT_ARCH                ARCH_ARM_A9Q
-#define DEFAULT_SOC                 SOC_GENERIC
+#define DEFAULT_ARCH                0x1//ARCH_ARM_A9Q
+#define DEFAULT_SOC                 0x0//SOC_GENERIC
 #define DEFAULT_INTRA4x4            0
 #define STRLENGTH                   500
 
@@ -141,14 +141,14 @@ private:
 
     bool mKeyFrameRequested;
 
-#ifdef FILE_DUMP_ENABLE
+#ifdef EFILE_DUMP_ENABLE
     char mInFile[200];
     char mOutFile[200];
 #endif /* FILE_DUMP_ENABLE */
 
-    IV_COLOR_FORMAT_T mIvVideoColorFormat;
+    uint32_t mIvVideoColorFormat;//IV_COLOR_FORMAT_T
 
-    IV_PROFILE_T mAVCEncProfile;
+    uint32_t mAVCEncProfile; //IV_PROFILE_T
     WORD32   mAVCEncLevel;
     bool     mStarted;
     bool     mSpsPpsHeaderReceived;
@@ -162,26 +162,26 @@ private:
     bool     mReconEnable;
     bool     mPSNREnable;
     bool     mEntropyMode;
-    IVE_SPEED_CONFIG     mEncSpeed;
+    uint32_t mEncSpeed;//IVE_SPEED_CONFIG
 
     uint8_t *mConversionBuffers[MAX_CONVERSION_BUFFERS];
     bool     mConversionBuffersFree[MAX_CONVERSION_BUFFERS];
     BufferInfo *mInputBufferInfo[MAX_INPUT_BUFFER_HEADERS];
-    iv_obj_t *mCodecCtx;         // Codec context
-    iv_mem_rec_t *mMemRecords;   // Memory records requested by the codec
+    void /*iv_obj_t*/ *mCodecCtx;         // Codec context
+    void /*iv_mem_rec_t*/ *mMemRecords;   // Memory records requested by the codec
     size_t mNumMemRecords;       // Number of memory records requested by codec
     size_t mNumCores;            // Number of cores used by the codec
 
     UWORD32 mHeaderGenerated;
     UWORD32 mBframes;
-    IV_ARCH_T mArch;
-    IVE_SLICE_MODE_T mSliceMode;
+    uint32_t mArch;//IV_ARCH_T
+    uint32_t mSliceMode;//IVE_SLICE_MODE_T
     UWORD32 mSliceParam;
     bool mHalfPelEnable;
     UWORD32 mIInterval;
     UWORD32 mIDRInterval;
     UWORD32 mDisableDeblkLevel;
-    IVE_AIR_MODE_T mAIRMode;
+    uint32_t mAIRMode;//IVE_AIR_MODE_T
     UWORD32 mAIRRefreshPeriod;
 
     void initEncParams();
@@ -207,9 +207,9 @@ private:
     OMX_ERRORTYPE internalSetFormatParams(
         const OMX_VIDEO_PARAM_PORTFORMATTYPE *format);
 
-    OMX_ERRORTYPE setFrameType(IV_PICTURE_CODING_TYPE_T  e_frame_type);
+    OMX_ERRORTYPE setFrameType(uint32_t/*IV_PICTURE_CODING_TYPE_T*/  e_frame_type);
     OMX_ERRORTYPE setQp();
-    OMX_ERRORTYPE setEncMode(IVE_ENC_MODE_T e_enc_mode);
+    OMX_ERRORTYPE setEncMode(uint32_t/*IVE_ENC_MODE_T*/ e_enc_mode);
     OMX_ERRORTYPE setDimensions();
     OMX_ERRORTYPE setNumCores();
     OMX_ERRORTYPE setFrameRate();
@@ -223,8 +223,8 @@ private:
     OMX_ERRORTYPE setVbvParams();
     void logVersion();
     OMX_ERRORTYPE setEncodeArgs(
-        ive_video_encode_ip_t *ps_encode_ip,
-        ive_video_encode_op_t *ps_encode_op,
+        void /*ive_video_encode_ip_t*/ *ps_encode_ip,
+        void /*ive_video_encode_op_t*/ *ps_encode_op,
         OMX_BUFFERHEADERTYPE *inputBufferHeader,
         OMX_BUFFERHEADERTYPE *outputBufferHeader);
 
@@ -255,26 +255,26 @@ private:
     DISALLOW_EVIL_CONSTRUCTORS(SoftAVC);
 };
 
-#ifdef FILE_DUMP_ENABLE
+#ifdef EFILE_DUMP_ENABLE
 
-#define INPUT_DUMP_PATH     "./avce_input"
-#define INPUT_DUMP_EXT      "yuv"
-#define OUTPUT_DUMP_PATH    "./avce_output"
-#define OUTPUT_DUMP_EXT     "h264"
+#define EINPUT_DUMP_PATH     "./avce_input"
+#define EINPUT_DUMP_EXT      "yuv"
+#define EOUTPUT_DUMP_PATH    "./avce_output"
+#define EOUTPUT_DUMP_EXT     "h264"
 
-#define GENERATE_FILE_NAMES() {                         \
+#define EGENERATE_FILE_NAMES() {                         \
     mTimeStart = os_get_systime();                      \
     strcpy(mInFile, "");                                \
-    sprintf(mInFile, "%s_%lu.%s", INPUT_DUMP_PATH,     \
+    sprintf(mInFile, "%s_%lu.%s", EINPUT_DUMP_PATH,     \
             mTimeStart,                                 \
-            INPUT_DUMP_EXT);                            \
+            EINPUT_DUMP_EXT);                            \
     strcpy(mOutFile, "");                               \
-    sprintf(mOutFile, "%s_%ld.%s", OUTPUT_DUMP_PATH,\
+    sprintf(mOutFile, "%s_%ld.%s", EOUTPUT_DUMP_PATH,\
             mTimeStart,                                 \
-            OUTPUT_DUMP_EXT);                           \
+            EOUTPUT_DUMP_EXT);                           \
 }
 
-#define CREATE_DUMP_FILE(m_filename) {                  \
+#define ECREATE_DUMP_FILE(m_filename) {                  \
     FILE *fp = fopen(m_filename, "wb");                 \
     if (fp != NULL) {                                   \
         logv("Opened file %s\n", m_filename);            \
@@ -283,7 +283,7 @@ private:
         logv("Could not open file %s\n", m_filename);    \
     }                                                   \
 }
-#define DUMP_TO_FILE(m_filename, m_buf, m_size)         \
+#define EDUMP_TO_FILE(m_filename, m_buf, m_size)         \
 {                                                       \
     FILE *fp = fopen(m_filename, "ab");                 \
     if (fp != NULL && m_buf != NULL) {                  \
@@ -302,13 +302,13 @@ private:
     }                                                   \
 }
 #else /* FILE_DUMP_ENABLE */
-#define INPUT_DUMP_PATH
-#define INPUT_DUMP_EXT
-#define OUTPUT_DUMP_PATH
-#define OUTPUT_DUMP_EXT
-#define GENERATE_FILE_NAMES()
-#define CREATE_DUMP_FILE(m_filename)
-#define DUMP_TO_FILE(m_filename, m_buf, m_size)
+#define EINPUT_DUMP_PATH
+#define EINPUT_DUMP_EXT
+#define EOUTPUT_DUMP_PATH
+#define EOUTPUT_DUMP_EXT
+#define EGENERATE_FILE_NAMES()
+#define ECREATE_DUMP_FILE(m_filename)
+#define EDUMP_TO_FILE(m_filename, m_buf, m_size)
 #endif /* FILE_DUMP_ENABLE */
 
 }  // namespace omxil

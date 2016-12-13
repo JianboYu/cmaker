@@ -12,12 +12,13 @@
 #include <os_time.h>
 #include "OMX_Video.h"
 #include "soft_avc_dec.h"
+#include "iv.h"
+#include "ivd.h"
+#include "ih264d.h"
 
 namespace omxil {
 
 #define NO_MEMORY (-1)
-
-const char *MEDIA_MIMETYPE_VIDEO_AVC = "video/avc";
 
 /** Function and structure definitions to keep code similar for each codec */
 #define ivdec_api_function              ih264d_api_function
@@ -31,7 +32,7 @@ const char *MEDIA_MIMETYPE_VIDEO_AVC = "video/avc";
 #define IVDEXT_CMD_CTL_SET_NUM_CORES    \
         (IVD_CONTROL_API_COMMAND_TYPE_T)IH264D_CMD_CTL_SET_NUM_CORES
 
-static const CodecProfileLevel kProfileLevels[] = {
+static const DCodecProfileLevel kProfileLevels[] = {
     { OMX_VIDEO_AVCProfileBaseline, OMX_VIDEO_AVCLevel1  },
     { OMX_VIDEO_AVCProfileBaseline, OMX_VIDEO_AVCLevel1b },
     { OMX_VIDEO_AVCProfileBaseline, OMX_VIDEO_AVCLevel11 },
@@ -172,13 +173,13 @@ void SoftAVCDec::logVersion() {
     s_ctl_ip.u4_version_buffer_size = sizeof(au1_buf);
 
     status =
-        ivdec_api_function(mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
+        ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
 
     if (status != IV_SUCCESS) {
-        loge("Error in getting version number: 0x%x",
+        loge("Error in getting version number: 0x%x\n",
                 s_ctl_op.u4_error_code);
     } else {
-        logv("Ittiam decoder version number: %s",
+        logv("Ittiam decoder version number: %s\n",
                 (char *)s_ctl_ip.pv_version_buffer);
     }
     return;
@@ -198,11 +199,11 @@ int32_t SoftAVCDec::setParams(size_t stride) {
     s_ctl_ip.u4_size = sizeof(ivd_ctl_set_config_ip_t);
     s_ctl_op.u4_size = sizeof(ivd_ctl_set_config_op_t);
 
-    logv("Set the run-time (dynamic) parameters stride = %zu", stride);
-    status = ivdec_api_function(mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
+    logv("Set the run-time (dynamic) parameters stride = %zu\n", stride);
+    status = ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
 
     if (status != IV_SUCCESS) {
-        loge("Error in setting the run-time parameters: 0x%x",
+        loge("Error in setting the run-time parameters: 0x%x\n",
                 s_ctl_op.u4_error_code);
 
         return -1;
@@ -233,9 +234,9 @@ int32_t SoftAVCDec::resetDecoder() {
     s_ctl_ip.u4_size = sizeof(ivd_ctl_reset_ip_t);
     s_ctl_op.u4_size = sizeof(ivd_ctl_reset_op_t);
 
-    status = ivdec_api_function(mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
+    status = ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_ctl_ip, (void *)&s_ctl_op);
     if (IV_SUCCESS != status) {
-        loge("Error in reset: 0x%x", s_ctl_op.u4_error_code);
+        loge("Error in reset: 0x%x\n", s_ctl_op.u4_error_code);
         return -1;
     }
     mSignalledError = false;
@@ -259,9 +260,9 @@ int32_t SoftAVCDec::setNumCores() {
     s_set_cores_ip.u4_size = sizeof(ivdext_ctl_set_num_cores_ip_t);
     s_set_cores_op.u4_size = sizeof(ivdext_ctl_set_num_cores_op_t);
     status = ivdec_api_function(
-            mCodecCtx, (void *)&s_set_cores_ip, (void *)&s_set_cores_op);
+            (iv_obj_t*)mCodecCtx, (void *)&s_set_cores_ip, (void *)&s_set_cores_op);
     if (IV_SUCCESS != status) {
-        loge("Error in setting number of cores: 0x%x",
+        loge("Error in setting number of cores: 0x%x\n",
                 s_set_cores_op.u4_error_code);
         return -1;
     }
@@ -280,10 +281,10 @@ int32_t SoftAVCDec::setFlushMode() {
 
     /* Set the decoder in Flush mode, subsequent decode() calls will flush */
     status = ivdec_api_function(
-            mCodecCtx, (void *)&s_video_flush_ip, (void *)&s_video_flush_op);
+            (iv_obj_t*)mCodecCtx, (void *)&s_video_flush_ip, (void *)&s_video_flush_op);
 
     if (status != IV_SUCCESS) {
-        loge("Error in setting the decoder in flush mode: (%d) 0x%x", status,
+        loge("Error in setting the decoder in flush mode: (%d) 0x%x\n", status,
                 s_video_flush_op.u4_error_code);
         return -1;
     }
@@ -338,11 +339,11 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
         s_num_mem_rec_op.u4_size = sizeof(s_num_mem_rec_op);
         s_num_mem_rec_ip.e_cmd = IV_CMD_GET_NUM_MEM_REC;
 
-        logv("Get number of mem records");
+        logv("Get number of mem records\n");
         status = ivdec_api_function(
-                mCodecCtx, (void *)&s_num_mem_rec_ip, (void *)&s_num_mem_rec_op);
+                (iv_obj_t*)mCodecCtx, (void *)&s_num_mem_rec_ip, (void *)&s_num_mem_rec_op);
         if (IV_SUCCESS != status) {
-            loge("Error in getting mem records: 0x%x",
+            loge("Error in getting mem records: 0x%x\n",
                     s_num_mem_rec_op.u4_error_code);
             return -1;
         }
@@ -353,7 +354,7 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
     mMemRecords = (iv_mem_rec_t *)ivd_aligned_malloc(
             128, mNumMemRecords * sizeof(iv_mem_rec_t));
     if (mMemRecords == NULL) {
-        loge("Allocation failure");
+        loge("Allocation failure\n");
         return NO_MEMORY;
     }
 
@@ -372,38 +373,38 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
         s_fill_mem_ip.u4_num_ref_frames = u4_num_ref_frames;
         s_fill_mem_ip.u4_share_disp_buf = u4_share_disp_buf;
         s_fill_mem_ip.u4_num_extra_disp_buf = 0;
-        s_fill_mem_ip.e_output_format = mIvColorFormat;
+        s_fill_mem_ip.e_output_format = (IV_COLOR_FORMAT_T)mIvColorFormat;
 
         s_fill_mem_ip.s_ivd_fill_mem_rec_ip_t.e_cmd = IV_CMD_FILL_NUM_MEM_REC;
-        s_fill_mem_ip.s_ivd_fill_mem_rec_ip_t.pv_mem_rec_location = mMemRecords;
+        s_fill_mem_ip.s_ivd_fill_mem_rec_ip_t.pv_mem_rec_location = (iv_mem_rec_t*)mMemRecords;
         s_fill_mem_ip.s_ivd_fill_mem_rec_ip_t.u4_max_frm_wd = displayStride;
         s_fill_mem_ip.s_ivd_fill_mem_rec_ip_t.u4_max_frm_ht = displayHeight;
         s_fill_mem_op.s_ivd_fill_mem_rec_op_t.u4_size =
             sizeof(ivdext_fill_mem_rec_op_t);
 
-        ps_mem_rec = mMemRecords;
+        ps_mem_rec = (iv_mem_rec_t*)mMemRecords;
         for (i = 0; i < mNumMemRecords; i++) {
             ps_mem_rec[i].u4_size = sizeof(iv_mem_rec_t);
         }
 
         status = ivdec_api_function(
-                mCodecCtx, (void *)&s_fill_mem_ip, (void *)&s_fill_mem_op);
+                (iv_obj_t*)mCodecCtx, (void *)&s_fill_mem_ip, (void *)&s_fill_mem_op);
 
         if (IV_SUCCESS != status) {
-            loge("Error in filling mem records: 0x%x",
+            loge("Error in filling mem records: 0x%x\n",
                     s_fill_mem_op.s_ivd_fill_mem_rec_op_t.u4_error_code);
             return -1;
         }
         mNumMemRecords =
             s_fill_mem_op.s_ivd_fill_mem_rec_op_t.u4_num_mem_rec_filled;
 
-        ps_mem_rec = mMemRecords;
+        ps_mem_rec = (iv_mem_rec_t*)mMemRecords;
 
         for (i = 0; i < mNumMemRecords; i++) {
             ps_mem_rec->pv_base = ivd_aligned_malloc(
                     ps_mem_rec->u4_mem_alignment, ps_mem_rec->u4_mem_size);
             if (ps_mem_rec->pv_base == NULL) {
-                loge("Allocation failure for memory record #%zu of size %u",
+                loge("Allocation failure for memory record #%zu of size %u\n",
                         i, ps_mem_rec->u4_mem_size);
                 status = IV_FAIL;
                 return NO_MEMORY;
@@ -422,7 +423,7 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
 
         s_init_ip.s_ivd_init_ip_t.u4_size = sizeof(ivdext_init_ip_t);
         s_init_ip.s_ivd_init_ip_t.e_cmd = (IVD_API_COMMAND_TYPE_T)IV_CMD_INIT;
-        s_init_ip.s_ivd_init_ip_t.pv_mem_rec_location = mMemRecords;
+        s_init_ip.s_ivd_init_ip_t.pv_mem_rec_location = (iv_mem_rec_t*)mMemRecords;
         s_init_ip.s_ivd_init_ip_t.u4_frm_max_wd = displayStride;
         s_init_ip.s_ivd_init_ip_t.u4_frm_max_ht = displayHeight;
 
@@ -435,16 +436,16 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
         s_init_op.s_ivd_init_op_t.u4_size = sizeof(s_init_op);
 
         s_init_ip.s_ivd_init_ip_t.u4_num_mem_rec = mNumMemRecords;
-        s_init_ip.s_ivd_init_ip_t.e_output_format = mIvColorFormat;
+        s_init_ip.s_ivd_init_ip_t.e_output_format = (IV_COLOR_FORMAT_T)mIvColorFormat;
 
-        mCodecCtx = (iv_obj_t *)mMemRecords[0].pv_base;
-        mCodecCtx->pv_fxns = dec_fxns;
-        mCodecCtx->u4_size = sizeof(iv_obj_t);
+        mCodecCtx = ((iv_mem_rec_t*)mMemRecords)[0].pv_base;
+        ((iv_obj_t*)mCodecCtx)->pv_fxns = dec_fxns;
+        ((iv_obj_t*)mCodecCtx)->u4_size = sizeof(iv_obj_t);
 
-        status = ivdec_api_function(mCodecCtx, (void *)&s_init_ip, (void *)&s_init_op);
+        status = ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_init_ip, (void *)&s_init_op);
         if (status != IV_SUCCESS) {
             mCodecCtx = NULL;
-            loge("Error in init: 0x%x",
+            loge("Error in init: 0x%x\n",
                     s_init_op.s_ivd_init_op_t.u4_error_code);
             return -1;
         }
@@ -466,7 +467,7 @@ int32_t SoftAVCDec::initDecoder(uint32_t width, uint32_t height) {
     uint32_t bufferSize = displaySizeY * 3 / 2;
     mFlushOutBuffer = (uint8_t *)ivd_aligned_malloc(128, bufferSize);
     if (NULL == mFlushOutBuffer) {
-        loge("Could not allocate flushOutputBuffer of size %u", bufferSize);
+        loge("Could not allocate flushOutputBuffer of size %u\n", bufferSize);
         return NO_MEMORY;
     }
 
@@ -481,7 +482,7 @@ int32_t SoftAVCDec::deInitDecoder() {
     if (mMemRecords) {
         iv_mem_rec_t *ps_mem_rec;
 
-        ps_mem_rec = mMemRecords;
+        ps_mem_rec = (iv_mem_rec_t*)mMemRecords;
         for (i = 0; i < mNumMemRecords; i++) {
             if (ps_mem_rec->pv_base) {
                 ivd_aligned_free(ps_mem_rec->pv_base);
@@ -510,7 +511,7 @@ int32_t SoftAVCDec::reInitDecoder(uint32_t width, uint32_t height) {
 
     ret = initDecoder(width, height);
     if (0 != ret) {
-        loge("Create failure");
+        loge("Create failure\n");
         deInitDecoder();
         return NO_MEMORY;
     }
@@ -640,8 +641,8 @@ OMX_ERRORTYPE SoftAVCDec::internalSetParameter(OMX_INDEXTYPE index, const OMX_PT
 }
 
 void SoftAVCDec::setDecodeArgs(
-        ivd_video_decode_ip_t *ps_dec_ip,
-        ivd_video_decode_op_t *ps_dec_op,
+        void /*ivd_video_decode_ip_t*/ *ps_dec_ip,
+        void /*ivd_video_decode_op_t*/ *ps_dec_op,
         OMX_BUFFERHEADERTYPE *inHeader,
         OMX_BUFFERHEADERTYPE *outHeader,
         size_t timeStampIx) {
@@ -649,22 +650,22 @@ void SoftAVCDec::setDecodeArgs(
     size_t sizeUV;
     uint8_t *pBuf;
 
-    ps_dec_ip->u4_size = sizeof(ivd_video_decode_ip_t);
-    ps_dec_op->u4_size = sizeof(ivd_video_decode_op_t);
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->u4_size = sizeof(ivd_video_decode_ip_t);
+    ((ivd_video_decode_op_t*)ps_dec_op)->u4_size = sizeof(ivd_video_decode_op_t);
 
-    ps_dec_ip->e_cmd = IVD_CMD_VIDEO_DECODE;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->e_cmd = IVD_CMD_VIDEO_DECODE;
 
     /* When in flush and after EOS with zero byte input,
      * inHeader is set to zero. Hence check for non-null */
     if (inHeader) {
-        ps_dec_ip->u4_ts = timeStampIx;
-        ps_dec_ip->pv_stream_buffer =
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->u4_ts = timeStampIx;
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->pv_stream_buffer =
             inHeader->pBuffer + inHeader->nOffset;
-        ps_dec_ip->u4_num_Bytes = inHeader->nFilledLen;
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->u4_num_Bytes = inHeader->nFilledLen;
     } else {
-        ps_dec_ip->u4_ts = 0;
-        ps_dec_ip->pv_stream_buffer = NULL;
-        ps_dec_ip->u4_num_Bytes = 0;
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->u4_ts = 0;
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->pv_stream_buffer = NULL;
+        ((ivd_video_decode_ip_t*)ps_dec_ip)->u4_num_Bytes = 0;
     }
 
     if (outHeader) {
@@ -674,14 +675,14 @@ void SoftAVCDec::setDecodeArgs(
     }
 
     sizeUV = sizeY / 4;
-    ps_dec_ip->s_out_buffer.u4_min_out_buf_size[0] = sizeY;
-    ps_dec_ip->s_out_buffer.u4_min_out_buf_size[1] = sizeUV;
-    ps_dec_ip->s_out_buffer.u4_min_out_buf_size[2] = sizeUV;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.u4_min_out_buf_size[0] = sizeY;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.u4_min_out_buf_size[1] = sizeUV;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.u4_min_out_buf_size[2] = sizeUV;
 
-    ps_dec_ip->s_out_buffer.pu1_bufs[0] = pBuf;
-    ps_dec_ip->s_out_buffer.pu1_bufs[1] = pBuf + sizeY;
-    ps_dec_ip->s_out_buffer.pu1_bufs[2] = pBuf + sizeY + sizeUV;
-    ps_dec_ip->s_out_buffer.u4_num_bufs = 3;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.pu1_bufs[0] = pBuf;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.pu1_bufs[1] = pBuf + sizeY;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.pu1_bufs[2] = pBuf + sizeY + sizeUV;
+    ((ivd_video_decode_ip_t*)ps_dec_ip)->s_out_buffer.u4_num_bufs = 3;
     return;
 }
 void SoftAVCDec::onPortFlushCompleted(OMX_U32 portIndex) {
@@ -697,7 +698,7 @@ void SoftAVCDec::onPortFlushCompleted(OMX_U32 portIndex) {
 
             setDecodeArgs(&s_dec_ip, &s_dec_op, NULL, NULL, 0);
 
-            status = ivdec_api_function(mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
+            status = ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
             if (0 == s_dec_op.u4_output_present) {
                 resetPlugin();
                 break;
@@ -826,7 +827,7 @@ void SoftAVCDec::onQueueFilled(OMX_U32 portIndex) {
             TIME_DIFF(mTimeEnd, mTimeStart, timeDelay);
 
             IV_API_CALL_STATUS_T status __attribute((__unused__));
-            status = ivdec_api_function(mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
+            status = ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
 
             bool unsupportedDimensions =
                 (IVD_STREAM_WIDTH_HEIGHT_NOT_SUPPORTED == (s_dec_op.u4_error_code & 0xFF));
@@ -837,7 +838,7 @@ void SoftAVCDec::onQueueFilled(OMX_U32 portIndex) {
             /* Compute time taken for decode() */
             TIME_DIFF(mTimeStart, mTimeEnd, timeTaken);
 
-            logv("timeTaken=%6d delay=%6d numBytes=%6d", timeTaken, timeDelay,
+            logv("timeTaken=%6d delay=%6d numBytes=%6d\n", timeTaken, timeDelay,
                    s_dec_op.u4_num_bytes_consumed);
             if (s_dec_op.u4_frame_decoded_flag && !mFlushNeeded) {
                 mFlushNeeded = true;
@@ -868,7 +869,7 @@ void SoftAVCDec::onQueueFilled(OMX_U32 portIndex) {
 
                 setDecodeArgs(&s_dec_ip, &s_dec_op, inHeader, outHeader, timeStampIx);
 
-                ivdec_api_function(mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
+                ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
                 return;
             }
 
@@ -885,7 +886,7 @@ void SoftAVCDec::onQueueFilled(OMX_U32 portIndex) {
 
                 setDecodeArgs(&s_dec_ip, &s_dec_op, inHeader, outHeader, timeStampIx);
 
-                ivdec_api_function(mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
+                ivdec_api_function((iv_obj_t*)mCodecCtx, (void *)&s_dec_ip, (void *)&s_dec_op);
                 return;
             }
 
@@ -994,7 +995,6 @@ void SoftAVCDec::initPorts(
     def.bBuffersContiguous = OMX_FALSE;
     def.nBufferAlignment = 1;
 
-    //def.format.video.cMIMEType = MEDIA_MIMETYPE_VIDEO_AVC;
     def.format.video.pNativeRender = NULL;
     /* size is initialized in updatePortDefinitions() */
     def.format.video.nBitrate = 0;
@@ -1165,7 +1165,7 @@ OMX_ERRORTYPE SoftAVCDec::internalGetParameter(
                   (OMX_VIDEO_PARAM_PROFILELEVELTYPE *) params;
 
             if (profileLevel->nPortIndex != kInputPortIndex) {
-                loge("Invalid port index: %ld", profileLevel->nPortIndex);
+                loge("Invalid port index: %ld\n", profileLevel->nPortIndex);
                 return OMX_ErrorUnsupportedIndex;
             }
 

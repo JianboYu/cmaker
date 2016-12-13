@@ -7,10 +7,6 @@
 #include "simple_soft_omx_component.h"
 #include <sys/time.h>
 #include "ih264_typedefs.h"
-#include "iv.h"
-#include "ivd.h"
-#include "ih264d.h"
-
 //#define FILE_DUMP_ENABLE
 
 namespace omxil {
@@ -38,7 +34,7 @@ namespace omxil {
 #define TIME_DIFF(start, end, diff) \
     diff = (end - start)
 
-struct CodecProfileLevel {
+struct DCodecProfileLevel {
   OMX_U32 mProfile;
   OMX_U32 mLevel;
 };
@@ -66,8 +62,8 @@ private:
         kNumBuffers = 8
     };
 
-    iv_obj_t *mCodecCtx;         // Codec context
-    iv_mem_rec_t *mMemRecords;   // Memory records requested by the codec
+    void /*iv_obj_t*/ *mCodecCtx;         // Codec context
+    void /*iv_mem_rec_t*/ *mMemRecords;   // Memory records requested by the codec
     size_t mNumMemRecords;       // Number of memory records requested by the codec
 
     size_t mNumCores;            // Number of cores to be uesd by the codec
@@ -90,7 +86,7 @@ private:
 #endif /* FILE_DUMP_ENABLE */
 
     OMX_COLOR_FORMATTYPE mOmxColorFormat;    // OMX Color format
-    IV_COLOR_FORMAT_T mIvColorFormat;        // Ittiam Color format
+    uint32_t/*IV_COLOR_FORMAT_T*/ mIvColorFormat;        // Ittiam Color format
 
     bool mIsInFlush;        // codec is flush mode
     bool mReceivedEOS;      // EOS is receieved on input port
@@ -119,8 +115,8 @@ private:
     int32_t reInitDecoder(uint32_t width, uint32_t height);
 
     void setDecodeArgs(
-            ivd_video_decode_ip_t *ps_dec_ip,
-            ivd_video_decode_op_t *ps_dec_op,
+            void /*ivd_video_decode_ip_t*/ *ps_dec_ip,
+            void /*ivd_video_decode_op_t*/ *ps_dec_op,
             OMX_BUFFERHEADERTYPE *inHeader,
             OMX_BUFFERHEADERTYPE *outHeader,
             size_t timeStampIx);

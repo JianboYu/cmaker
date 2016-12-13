@@ -31,12 +31,16 @@ static void InitOMXParams(T *params) {
 
 typedef struct OMXContext {
   OMX_HANDLETYPE hComponent;
-  OMX_BUFFERHEADERTYPE *inBuffer[2];
-  OMX_BUFFERHEADERTYPE *outBuffer[2];
+  OMX_BUFFERHEADERTYPE *inBuffer[8];
+  OMX_BUFFERHEADERTYPE *outBuffer[8];
   cirq_handle fbd;
   cirq_handle ebd;
   os::Thread *thread;
   OMX_TICKS  ts;
+  FILE *fp;
+  bool encode;
+  FILE *fp_h264;
+  FILE *fp_len;
 }OMXContext;
 
 OMX_ERRORTYPE sEventHandler(
@@ -71,8 +75,7 @@ OMX_ERRORTYPE sFillBufferDone(
     return OMX_ErrorNone;
 }
 
-bool thread_loop(void *ctx) {
-  logv("thread_loop ....\n");
+bool encoder_loop(void *ctx) {
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   OMXContext *omx_ctx = (OMXContext *)ctx;
 
@@ -85,6 +88,13 @@ bool thread_loop(void *ctx) {
     pBuffer->nFilledLen = 1280*720*3 >> 1;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = omx_ctx->ts;
+
+    uint32_t readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
+    if (readed < pBuffer->nFilledLen) {
+      rewind(omx_ctx->fp);
+      readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
+      CHECK_EQ(readed, pBuffer->nFilledLen);
+    }
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logv("EmptyThisBuffer: %p\n", pBuffer);
@@ -94,7 +104,15 @@ bool thread_loop(void *ctx) {
   pdata = NULL;
   cirq_dequeue(omx_ctx->fbd, &pdata);
   pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-  if (pBuffer) {
+  if (pBuffer ) {
+    if (pBuffer->nFilledLen > 0) {
+      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_h264);
+      CHECK_EQ(writed, pBuffer->nFilledLen);
+      writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
+      CHECK_GT(writed, 0);
+      fflush(omx_ctx->fp_h264);
+      fflush(omx_ctx->fp_len);
+    }
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 0;
     pBuffer->nOffset = 0;
@@ -105,6 +123,67 @@ bool thread_loop(void *ctx) {
   }
   os_msleep(40);
   return true;
+}
+
+bool decoder_loop(void *ctx) {
+  OMX_ERRORTYPE oRet = OMX_ErrorNone;
+  OMXContext *omx_ctx = (OMXContext *)ctx;
+
+  OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
+  void *pdata = NULL;
+  cirq_dequeue(omx_ctx->ebd, &pdata);
+  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  if (pBuffer) {
+    int32_t len = 0;
+    int32_t readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
+    if (readed < 0 || len <= 0) {
+      rewind(omx_ctx->fp_h264);
+      rewind(omx_ctx->fp_len);
+      readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
+      if (readed < 0 || len <= 0) {
+        CHECK(!"BUG");
+      }
+    }
+    readed = fread(pBuffer->pBuffer, 1, len, omx_ctx->fp_h264);
+    CHECK_EQ(readed, len);
+
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = len;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = omx_ctx->ts;
+    oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    logv("EmptyThisBuffer: %p\n", pBuffer);
+    omx_ctx->ts += 3600;
+  }
+
+  pdata = NULL;
+  cirq_dequeue(omx_ctx->fbd, &pdata);
+  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  if (pBuffer) {
+    if (pBuffer->nFilledLen > 0) {
+      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
+      CHECK_EQ(writed, pBuffer->nFilledLen);
+      fflush(omx_ctx->fp);
+    }
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
+    logv("FillThisBuffer: %p\n", pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+  os_msleep(40);
+  return true;
+}
+
+bool thread_loop(void *ctx) {
+  OMXContext *omx_ctx = (OMXContext *)ctx;
+  if (omx_ctx->encode)
+    return encoder_loop(ctx);
+  else
+    return decoder_loop(ctx);
 }
 
 void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
@@ -126,7 +205,7 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
       logv("ColorFmt: %x\n", def->format.video.eColorFormat);
     }
 }
-int32_t main(int argc, char *argv[]) {
+int32_t ve_main(int argc, char *argv[]) {
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   oRet = OMX_Init();
   CHECK_EQ(oRet, OMX_ErrorNone);
@@ -148,6 +227,10 @@ int32_t main(int argc, char *argv[]) {
   CHECK_EQ(0, status);
   omx_ctx->thread = os::Thread::Create(thread_loop, omx_ctx);
   omx_ctx->ts = 3600;
+  omx_ctx->encode = true;
+  omx_ctx->fp = fopen("i420_1280x720_8pi_KristenAndSara_60.yuv", "r");
+  omx_ctx->fp_h264 = fopen("i420_1280x720_8pi_KristenAndSara_60.h264", "w+");
+  omx_ctx->fp_len = fopen("i420_1280x720_8pi_KristenAndSara_60.len", "w+");
 
   OMX_CALLBACKTYPE omx_cb;
   omx_cb.EventHandler = sEventHandler;
@@ -215,6 +298,7 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
+#if 0
   OMX_BUFFERHEADERTYPE* pBuffer = NULL;
   for (int32_t i = 0; i < 2; ++i) {
     pBuffer = omx_ctx->inBuffer[i];
@@ -236,7 +320,178 @@ int32_t main(int argc, char *argv[]) {
     oRet = OMX_FillThisBuffer(pHandle, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
+#else
+  for (int32_t i = 0; i < 2; ++i) {
+    int32_t status = cirq_enqueue(omx_ctx->ebd, omx_ctx->inBuffer[i]);
+    CHECK_EQ(0, status);
+    status = cirq_enqueue(omx_ctx->fbd, omx_ctx->outBuffer[i]);
+    CHECK_EQ(0, status);
+  }
+#endif
 
+  uint32_t tid = 0;
+  omx_ctx->thread->start(tid);
+  os_sleep(1000);
+
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_FreeBuffer(pHandle, 0, omx_ctx->inBuffer[i]);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+  for (int32_t i = 0; i < 2; ++i) {
+    oRet = OMX_FreeBuffer(pHandle, 1, omx_ctx->outBuffer[i]);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateLoaded, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+
+  oRet = OMX_FreeHandle(pHandle);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  oRet = OMX_Deinit();
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  omx_ctx->thread->stop();
+  delete omx_ctx->thread;
+  status = cirq_destory(omx_ctx->fbd);
+  CHECK_EQ(0, status);
+  status = cirq_destory(omx_ctx->ebd);
+  CHECK_EQ(0, status);
+  fclose(omx_ctx->fp);
+  fclose(omx_ctx->fp_h264);
+
+  free(omx_ctx);
+  return 0;
+}
+
+int32_t vd_main(int argc, char *argv[]) {
+  OMX_ERRORTYPE oRet = OMX_ErrorNone;
+  oRet = OMX_Init();
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  scoped_array<char> comp_name(new char [128]);
+  for (int32_t i = 0; ; ++i) {
+    oRet = OMX_ComponentNameEnum((OMX_STRING)comp_name.get(), 128, i);
+    if (OMX_ErrorNoMore == oRet)
+      break;
+    CHECK_EQ(oRet, OMX_ErrorNone);
+
+    log_verbose("tag", "Component[%d]: %s \n", i + 1, comp_name.get());
+  }
+  OMXContext *omx_ctx = (OMXContext*)malloc(sizeof(OMXContext));
+  CHECK(omx_ctx);
+  int32_t status = -1;
+  status = cirq_create(&omx_ctx->fbd, 8);
+  CHECK_EQ(0, status);
+  status = cirq_create(&omx_ctx->ebd, 8);
+  CHECK_EQ(0, status);
+  omx_ctx->thread = os::Thread::Create(thread_loop, omx_ctx);
+  omx_ctx->ts = 3600;
+  omx_ctx->encode = false;
+  omx_ctx->fp = fopen("output-i420_1280x720_8pi_KristenAndSara_60.yuv", "w+");
+  omx_ctx->fp_h264 = fopen("i420_1280x720_8pi_KristenAndSara_60.h264", "r");
+  omx_ctx->fp_len = fopen("i420_1280x720_8pi_KristenAndSara_60.len", "r");
+
+  OMX_CALLBACKTYPE omx_cb;
+  omx_cb.EventHandler = sEventHandler;
+  omx_cb.FillBufferDone = sFillBufferDone;
+  omx_cb.EmptyBufferDone = sEmptyBufferDone;
+  OMX_HANDLETYPE pHandle;
+  oRet = OMX_GetHandle(&pHandle,
+    (OMX_STRING)"OMX.omxil.h264.decoder",
+    (OMX_PTR)omx_ctx,
+    &omx_cb);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  omx_ctx->hComponent = pHandle;
+
+  OMX_PARAM_PORTDEFINITIONTYPE def;
+  InitOMXParams(&def);
+  def.nPortIndex = 0;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  def.format.video.nFrameWidth = 1280;
+  def.format.video.nFrameHeight = 720;
+  def.format.video.nStride = def.format.video.nFrameWidth;
+  def.format.video.nSliceHeight = def.format.video.nFrameHeight;
+  def.format.video.nBitrate = 1000;
+  def.format.video.xFramerate = 0;
+  def.format.video.eCompressionFormat = OMX_VIDEO_CodingAVC;
+  def.format.video.eColorFormat = OMX_COLOR_FormatUnused;
+  DumpPortDefine(&def);
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  def.nPortIndex = 1;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  def.format.video.nFrameWidth = 1280;
+  def.format.video.nFrameHeight = 720;
+  def.format.video.nStride = def.format.video.nFrameWidth;
+  def.format.video.nSliceHeight = def.format.video.nFrameHeight;
+  def.format.video.nBitrate = 0;
+  def.format.video.xFramerate = 30 << 16;
+  def.format.video.eCompressionFormat = OMX_VIDEO_CodingUnused;
+  def.format.video.eColorFormat = OMX_COLOR_FormatYUV420Planar;
+  DumpPortDefine(&def);
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  for (int32_t i = 0; i < 8; ++i) {
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 1);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    CHECK(omx_ctx->inBuffer[i]);
+    logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
+        0, i, omx_ctx->inBuffer[i]->pBuffer, omx_ctx->inBuffer[i]->nFilledLen);
+  }
+
+  for (int32_t i = 0; i < 8; ++i) {
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 1);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    CHECK(omx_ctx->outBuffer[i]);
+    logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
+        1, i, omx_ctx->outBuffer[i]->pBuffer, omx_ctx->outBuffer[i]->nFilledLen);
+  }
+  oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+#if 0
+  OMX_BUFFERHEADERTYPE* pBuffer = NULL;
+  for (int32_t i = 0; i < 8; ++i) {
+    pBuffer = omx_ctx->inBuffer[i];
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 1280*720*3 >> 1;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = omx_ctx->ts;
+    oRet = OMX_EmptyThisBuffer(pHandle, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    omx_ctx->ts += 3600;
+  }
+
+  for (int32_t i = 0; i < 8; ++i) {
+    pBuffer = omx_ctx->outBuffer[i];
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(pHandle, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+#else
+  for (int32_t i = 0; i < 8; ++i) {
+    int32_t status = cirq_enqueue(omx_ctx->ebd, omx_ctx->inBuffer[i]);
+    CHECK_EQ(0, status);
+    status = cirq_enqueue(omx_ctx->fbd, omx_ctx->outBuffer[i]);
+    CHECK_EQ(0, status);
+  }
+#endif
   uint32_t tid = 0;
   omx_ctx->thread->start(tid);
   os_sleep(1000);
@@ -271,5 +526,30 @@ int32_t main(int argc, char *argv[]) {
   CHECK_EQ(0, status);
 
   free(omx_ctx);
+  return 0;
+}
+
+
+static void usage() {
+  logv("Usage:\n");
+  logv("./omxil_utest fun_name [options]\n");
+  logv("fun_name as following:\n");
+  logv("1. ve\t\tavc encoder\n");
+  logv("2. vd\t\tavc decoder\n");
+}
+
+
+int32_t main(int32_t argc, char *argv[]) {
+  if (argc < 2) {
+    usage();
+    exit(0);
+  }
+  if (!strcmp(argv[1], "ve")) {
+    return ve_main(argc-2, &argv[2]);
+  } else if (!strcmp(argv[1], "vd")) {
+    return vd_main(argc-2, &argv[2]);
+  } else {
+    usage();
+  }
   return 0;
 }

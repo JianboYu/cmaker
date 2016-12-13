@@ -3,6 +3,7 @@
 #include <os_mutex.h>
 #include <OMX_Core.h>
 #include <soft_avc_enc.h>
+#include <soft_avc_dec.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -82,7 +83,7 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
     *pHandle = (OMX_HANDLETYPE)pComponent;
     return OMX_ErrorNone;
   } else if (!strncmp(cComponentName, "OMX.omxil.h264.decoder", 22)) {
-    #if 0
+    #if 1
     pSoftOMXCom = new omxil::SoftAVCDec(cComponentName,
                                         pCallBacks,
                                         pAppData,
