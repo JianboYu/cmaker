@@ -201,6 +201,7 @@ typedef enum OMX_AUDIO_AACPROFILETYPE{
     OMX_AUDIO_AACObjectERLC = 17,
     OMX_AUDIO_AACObjectLD = 23,
     OMX_AUDIO_AACObjectHE_PS = 29,
+    OMX_AUDIO_AACObjectELD = 39,      /** AAC Enhanced Low Delay. NOTE: Pending Khronos standardization */
     OMX_AUDIO_AACObjectUnknown           = 0x6EFFFFFF,
     OMX_AUDIO_AACObjectKhronosExtensions = 0x6F000000, /**< Reserved region for introducing Khronos Standard Extensions */ 
     OMX_AUDIO_AACObjectVendorStartUnused = 0x7F000000, /**< Reserved region for introducing Vendor Extensions */
@@ -213,6 +214,8 @@ typedef enum OMX_AUDIO_AACPROFILETYPE{
 #define OMX_AUDIO_AACToolTNS  0x00000004
 #define OMX_AUDIO_AACToolPNS  0x00000008
 #define OMX_AUDIO_AACToolLTP  0x00000010
+ /**< NOT A KHRONOS VALUE, offset for vendor-specific additions */
+#define OMX_AUDIO_AACToolVendor 0x00010000
 #define OMX_AUDIO_AACToolAll  0x7FFFFFFF
 
 #define OMX_AUDIO_AACERNone  0x00000000
