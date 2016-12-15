@@ -10,6 +10,8 @@ INCLUDE_DIRECTORIES(./inc ./src ../../os/inc
                     ../third_party/libavc/common/
                     ../third_party/libavc/encoder/
                     ../third_party/libavc/decoder/
+                    ./src/codecs/aacenc
+                    ./src/codecs/aacdec
                     "../third_party/aac/libAACdec/include"
                     "../third_party/aac/libAACenc/include"
                     "../third_party/aac/libPCMutils/include"
@@ -25,7 +27,7 @@ SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS}")
 MESSAGE(INFO " libomxil CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 MESSAGE(INFO " libomxil CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 SET_TARGET_PROPERTIES(libomxil PROPERTIES OUTPUT_NAME "omxil")
-TARGET_LINK_LIBRARIES(libomxil libos libutility libavcenc libavcdec)
+TARGET_LINK_LIBRARIES(libomxil libos libutility libavcenc libavcdec libFraunhoferAAC)
 if (NOT ANDROID)
   SET(CMAKE_CXX_FLAGS "-fPIC ${CMAKE_CXX_FLAGS} -DOS_POSIX -DOS_LINUX")
 elseif (ANDROID)

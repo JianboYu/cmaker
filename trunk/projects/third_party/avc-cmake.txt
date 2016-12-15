@@ -59,7 +59,7 @@ SET(avce_src_c
 if (ARCH_x86_64)
   SET(ARCH_CFLAGS "-DX86 -msse4.2")
   SET(ARCH "x86")
-  
+
   SET(avce_src_arch_c
       "encoder/x86/ih264e_function_selector.c"
       "encoder/x86/ih264e_function_selector_sse42.c"
@@ -212,7 +212,7 @@ MESSAGE(INFO " libavcdec ASM_EXTENSIONS: ${CMAKE_ASM_SOURCE_FILE_EXTENSIONS}")
 
 ADD_LIBRARY(libavcdec STATIC ${avcd_src_c} ${avcd_src_arch_c} ${avcd_src_arch_asm})
 
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} ${ARCH_CFLAGS} -fPIC -O3 -Wno-error")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} ${ARCH_CFLAGS} -fPIC -O3 -Wno-error -Wno-all")
 MESSAGE(INFO " libavcdec CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 MESSAGE(INFO " libavcdec CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 SET_TARGET_PROPERTIES(libavcdec PROPERTIES OUTPUT_NAME "avcdec")

@@ -4,6 +4,8 @@
 #include <OMX_Core.h>
 #include <soft_avc_enc.h>
 #include <soft_avc_dec.h>
+#include <soft_aac_enc.h>
+#include <soft_aac_dec.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -83,7 +85,6 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
     *pHandle = (OMX_HANDLETYPE)pComponent;
     return OMX_ErrorNone;
   } else if (!strncmp(cComponentName, "OMX.omxil.h264.decoder", 22)) {
-    #if 1
     pSoftOMXCom = new omxil::SoftAVCDec(cComponentName,
                                         pCallBacks,
                                         pAppData,
@@ -93,8 +94,26 @@ OMX_API OMX_ERRORTYPE OMX_APIENTRY OMX_GetHandle(
     pComponent->pComponentPrivate = pSoftOMXCom;
     *pHandle = (OMX_HANDLETYPE)pComponent;
     return OMX_ErrorNone;
-    #endif
-    return OMX_ErrorNotImplemented;
+  } else if (!strncmp(cComponentName, "OMX.omxil.aac.encoder", 21)) {
+    pSoftOMXCom = new omxil::SoftAACEncoder(cComponentName,
+                                        pCallBacks,
+                                        pAppData,
+                                        &pComponent);
+    if (!pSoftOMXCom)
+      return OMX_ErrorInsufficientResources;
+    pComponent->pComponentPrivate = pSoftOMXCom;
+    *pHandle = (OMX_HANDLETYPE)pComponent;
+    return OMX_ErrorNone;
+  } else if (!strncmp(cComponentName, "OMX.omxil.aac.decoder", 21)) {
+    pSoftOMXCom = new omxil::SoftAACDecoder(cComponentName,
+                                        pCallBacks,
+                                        pAppData,
+                                        &pComponent);
+    if (!pSoftOMXCom)
+      return OMX_ErrorInsufficientResources;
+    pComponent->pComponentPrivate = pSoftOMXCom;
+    *pHandle = (OMX_HANDLETYPE)pComponent;
+    return OMX_ErrorNone;
   } else {
     return OMX_ErrorNotImplemented;
   }

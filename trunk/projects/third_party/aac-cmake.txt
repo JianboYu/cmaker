@@ -29,8 +29,8 @@ ADD_LIBRARY(libFraunhoferAAC STATIC ${aacdec_src}
             ${sbrdec_src}
             ${sbrenc_src}
            ) 
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PRJ_CXX_FLAGS} --std=c++98 -Wno-error")
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} -Wno-sequence-point -Wno-extra -Wno-error")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_PRJ_CXX_FLAGS} --std=c++98 -Wno-error -Wno-all")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_PRJ_C_FLAGS} -Wno-sequence-point -Wno-extra -Wno-error -Wno-all")
 MESSAGE(INFO " libFraunhoferAAC CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 MESSAGE(INFO " libFraunhoferAAC CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 SET_TARGET_PROPERTIES(libFraunhoferAAC PROPERTIES OUTPUT_NAME "FraunhoferAAC")

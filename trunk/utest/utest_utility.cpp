@@ -149,7 +149,7 @@ int32_t memory_pool_main(int32_t argc, char *argv[]) {
   pMem = pPool->get(slot[0]);
   log_verbose("tag" , "get pMem: %p\n", pMem);
   CHECK(pMem->ptr());
-  CHECK_EQ(pMem->size(), 128);
+  CHECK_EQ(pMem->size(), (uint32_t)128);
 
   CHECK_EQ(0, pPool->put(slot[0], pMem));
   log_verbose("tag" , "put pMem: %p\n", pMem);
@@ -160,7 +160,7 @@ int32_t memory_pool_main(int32_t argc, char *argv[]) {
   pMemVideo = pPool->get(slot[1]);
   log_verbose("tag" , "get video pMem: %p\n", pMemVideo);
   CHECK(pMemVideo->ptr());
-  CHECK_EQ(pMemVideo->size(), 3110400);
+  CHECK_EQ(pMemVideo->size(), (uint32_t)3110400);
   CHECK_EQ(0, pPool->put(slot[1], pMemVideo));
 
   for (int32_t i = 0; i < 6; ++i) {
