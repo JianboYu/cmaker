@@ -45,12 +45,12 @@ enum {
  * Misc utility routines
  */
 
-#if defined(OS_WINDOWS)
+#if defined(_OS_WINDOWS)
 bool StringCompare(const char* str1, const char* str2,
                    const uint32_t length) {
   return _strnicmp(str1, str2, length) == 0;
 }
-#elif defined(OS_LINUX) || defined(OS_MAC)
+#elif defined(_OS_LINUX) || defined(_OS_MAC)
 bool StringCompare(const char* str1, const char* str2,
                    const uint32_t length) {
   return strncasecmp(str1, str2, length) == 0;

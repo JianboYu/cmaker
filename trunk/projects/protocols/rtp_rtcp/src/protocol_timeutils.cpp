@@ -10,14 +10,14 @@
 
 #include <stdint.h>
 
-#if defined(OS_POSIX)
+#if defined(_OS_POSIX)
 #include <sys/time.h>
-#if defined(OS_MAC)
+#if defined(_OS_MAC)
 #include <mach/mach_time.h>
 #endif
 #endif
 
-#if defined(OS_WINDOWS)
+#if defined(_OS_WINDOWS)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -40,7 +40,7 @@ ClockInterface* SetClockForTesting(ClockInterface* clock) {
 
 uint64_t SystemTimeNanos() {
   int64_t ticks;
-#if defined(OS_MAC)
+#if defined(_OS_MAC)
   static mach_timebase_info_data_t timebase;
   if (timebase.denom == 0) {
     // Get the timebase if this is the first time we run.
@@ -51,14 +51,14 @@ uint64_t SystemTimeNanos() {
   }
   // Use timebase to convert absolute time tick units into nanoseconds.
   ticks = mach_absolute_time() * timebase.numer / timebase.denom;
-#elif defined(OS_POSIX)
+#elif defined(_OS_POSIX)
   struct timespec ts;
   // TODO(deadbeef): Do we need to handle the case when CLOCK_MONOTONIC is not
   // supported?
   clock_gettime(CLOCK_MONOTONIC, &ts);
   ticks = kNumNanosecsPerSec * static_cast<int64_t>(ts.tv_sec) +
           static_cast<int64_t>(ts.tv_nsec);
-#elif defined(OS_WINDOWNS)
+#elif defined(_OS_WINDOWNS)
   static volatile LONG last_timegettime = 0;
   static volatile int64_t num_wrap_timegettime = 0;
   volatile LONG* last_timegettime_ptr = &last_timegettime;

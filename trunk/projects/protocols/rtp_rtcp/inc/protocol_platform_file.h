@@ -13,15 +13,15 @@
 
 #include <stdio.h>
 
-#if defined(OS_WINDOWS)
+#if defined(_OS_WINDOWS)
 #include <windows.h>
 #endif
 
 namespace protocol {
 
-#if defined(OS_WINDOWS)
+#if defined(_OS_WINDOWS)
 typedef HANDLE PlatformFile;
-#elif defined(OS_POSIX)
+#elif defined(_OS_POSIX) || defined(_OS_LINUX)
 typedef int PlatformFile;
 #else
 #error Unsupported platform
