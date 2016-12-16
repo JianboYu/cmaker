@@ -39,15 +39,13 @@ bool CondPosix::wait_timeout(Mutex *mut, uint64_t ms) {
 #else
   clock_gettime(CLOCK_MONOTONIC, &ts);
 #endif
-  ts.tv_sec += ms / 1000;
-  ts.tv_nsec += (ms % 1000) * 1E6;
+  ts.tv_nsec += (ms - ((ms / 1000)* 1000)) * 1000000000;
 
-  if (ts.tv_nsec >= 1E9)
+  if (ts.tv_nsec >= 1000000000)
   {
-      ts.tv_sec += ts.tv_nsec / 1E9;
-      ts.tv_nsec %= 1000000000;
+    ts.tv_sec += ts.tv_nsec / 1000000000;
+    ts.tv_nsec %= 1000000000;
   }
-
   MutexPosix* mutex = reinterpret_cast<MutexPosix*>(mut);
   int32_t ret = pthread_cond_timedwait(&_cond, &mutex->_mutex, &ts);
   return ret == ETIMEDOUT ? false : true;

@@ -15,6 +15,8 @@
 #include <OMX_Component.h>
 #include <OMX_Index.h>
 #include <OMX_Video.h>
+#include <OMX_AudioExt.h>
+#include <OMX_IndexExt.h>
 
 using namespace os;
 using namespace core;
@@ -178,60 +180,6 @@ bool decoder_loop(void *ctx) {
   os_msleep(40);
   return true;
 }
-
-bool audio_decoder_loop(void *ctx) {
-  OMX_ERRORTYPE oRet = OMX_ErrorNone;
-  OMXContext *omx_ctx = (OMXContext *)ctx;
-
-  OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
-  void *pdata = NULL;
-  cirq_dequeue(omx_ctx->ebd, &pdata);
-  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-  if (pBuffer) {
-    int32_t len = 0;
-    int32_t readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
-    if (readed < 0 || len <= 0) {
-      rewind(omx_ctx->fp_encoded);
-      rewind(omx_ctx->fp_len);
-      readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
-      if (readed < 0 || len <= 0) {
-        CHECK(!"BUG");
-      }
-    }
-    readed = fread(pBuffer->pBuffer, 1, len, omx_ctx->fp_encoded);
-    CHECK_EQ(readed, len);
-
-    pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = len;
-    pBuffer->nOffset = 0;
-    pBuffer->nTimeStamp = omx_ctx->ts;
-    oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
-    CHECK_EQ(oRet, OMX_ErrorNone);
-    logv("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 3600;
-  }
-
-  pdata = NULL;
-  cirq_dequeue(omx_ctx->fbd, &pdata);
-  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-  if (pBuffer) {
-    if (pBuffer->nFilledLen > 0) {
-      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
-      CHECK_EQ(writed, pBuffer->nFilledLen);
-      fflush(omx_ctx->fp);
-    }
-    pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 0;
-    pBuffer->nOffset = 0;
-    pBuffer->nTimeStamp = 0;
-    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
-    logv("FillThisBuffer: %p\n", pBuffer);
-    CHECK_EQ(oRet, OMX_ErrorNone);
-  }
-  os_msleep(40);
-  return true;
-}
-
 bool thread_loop(void *ctx) {
   OMXContext *omx_ctx = (OMXContext *)ctx;
   if (omx_ctx->encode)
@@ -577,14 +525,13 @@ bool audio_encoder_loop(void *ctx) {
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = omx_ctx->ts;
 
-    #if 0
     uint32_t readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
     if (readed < pBuffer->nFilledLen) {
       rewind(omx_ctx->fp);
       readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
       CHECK_EQ(readed, pBuffer->nFilledLen);
     }
-    #endif
+
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logv("EmptyThisBuffer: %p\n", pBuffer);
@@ -614,6 +561,60 @@ bool audio_encoder_loop(void *ctx) {
   os_msleep(40);
   return true;
 }
+
+bool audio_decoder_loop(void *ctx) {
+  OMX_ERRORTYPE oRet = OMX_ErrorNone;
+  OMXContext *omx_ctx = (OMXContext *)ctx;
+
+  OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
+  void *pdata = NULL;
+  cirq_dequeue(omx_ctx->ebd, &pdata);
+  OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  if (pBuffer) {
+    int32_t len = 0;
+    int32_t readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
+    if (readed < 0 || len <= 0) {
+      rewind(omx_ctx->fp_encoded);
+      rewind(omx_ctx->fp_len);
+      readed = fscanf(omx_ctx->fp_len, "%d\n", &len);
+      if (readed < 0 || len <= 0) {
+        CHECK(!"BUG");
+      }
+    }
+    readed = fread(pBuffer->pBuffer, 1, len, omx_ctx->fp_encoded);
+    CHECK_EQ(readed, len);
+
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = len;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = omx_ctx->ts;
+    oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+    logv("EmptyThisBuffer: %p\n", pBuffer);
+    omx_ctx->ts += 3600;
+  }
+
+  pdata = NULL;
+  cirq_dequeue(omx_ctx->fbd, &pdata);
+  pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
+  if (pBuffer) {
+    if (pBuffer->nFilledLen > 0) {
+      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
+      CHECK_EQ(writed, pBuffer->nFilledLen);
+      fflush(omx_ctx->fp);
+    }
+    pBuffer->nFlags = 0;
+    pBuffer->nFilledLen = 0;
+    pBuffer->nOffset = 0;
+    pBuffer->nTimeStamp = 0;
+    oRet = OMX_FillThisBuffer(hComponent, pBuffer);
+    logv("FillThisBuffer: %p\n", pBuffer);
+    CHECK_EQ(oRet, OMX_ErrorNone);
+  }
+  os_msleep(40);
+  return true;
+}
+
 
 bool audio_thread_loop(void *ctx) {
   OMXContext *omx_ctx = (OMXContext *)ctx;
@@ -650,6 +651,10 @@ int32_t ae_main(int argc, char *argv[]) {
   omx_ctx->fp_encoded = fopen("32k-mono-16width.aac", "w+");
   omx_ctx->fp_len = fopen("32k-mono-16width-aac.len", "w+");
 
+  OMX_U32 numChannels = 1;
+  OMX_U32 sampleRate = 32000;
+  OMX_U32 bitRate = 8000;
+
   OMX_CALLBACKTYPE omx_cb;
   omx_cb.EventHandler = sEventHandler;
   omx_cb.FillBufferDone = sFillBufferDone;
@@ -667,6 +672,7 @@ int32_t ae_main(int argc, char *argv[]) {
   def.nPortIndex = 0;
   oRet = OMX_GetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
+  def.format.audio.eEncoding = OMX_AUDIO_CodingPCM;
   DumpPortDefine(&def);
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
@@ -674,8 +680,66 @@ int32_t ae_main(int argc, char *argv[]) {
   def.nPortIndex = 1;
   oRet = OMX_GetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
+  def.format.audio.bFlagErrorConcealment = OMX_TRUE;
+  def.format.audio.eEncoding = OMX_AUDIO_CodingAAC;
   DumpPortDefine(&def);
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_AUDIO_PARAM_PCMMODETYPE pcmParams;
+  InitOMXParams(&pcmParams);
+  pcmParams.nPortIndex = 0;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioPcm, &pcmParams);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  pcmParams.nChannels = numChannels;
+  pcmParams.eNumData = OMX_NumericalDataSigned;
+  pcmParams.bInterleaved = OMX_TRUE;
+  pcmParams.nBitPerSample = 16;
+  pcmParams.nSamplingRate = sampleRate;
+  pcmParams.ePCMMode = OMX_AUDIO_PCMModeLinear;
+  pcmParams.eChannelMapping[0]=OMX_AUDIO_ChannelCF;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioPcm, &pcmParams);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_AUDIO_PARAM_AACPROFILETYPE profile;
+  //InitOMXParams(&profile);
+  //profile.nPortIndex = 0;
+  //oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  //profile.nChannels = numChannels;
+  //profile.nSampleRate = sampleRate;
+  //profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
+  //oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  //CHECK_EQ(oRet, OMX_ErrorNone);
+
+  //OMX_AUDIO_PARAM_ANDROID_AACPRESENTATIONTYPE presentation;
+  //presentation.nMaxOutputChannels = 6;
+  //presentation.nDrcCut = -1;
+  //presentation.nDrcBoost = -1;
+  //presentation.nHeavyCompression = -1;
+  //presentation.nTargetReferenceLevel = -1;
+  //presentation.nEncodedTargetLevel = -1;
+  //presentation.nPCMLimiterEnable = -1;
+  //oRet = OMX_SetParameter(pHandle, (OMX_INDEXTYPE)OMX_IndexParamAudioAndroidAacPresentation, &presentation);
+  //CHECK_EQ(oRet, OMX_ErrorNone);
+
+  //OMX_AUDIO_PARAM_AACPROFILETYPE profile;
+
+  InitOMXParams(&profile);
+  profile.nPortIndex = 1;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  profile.nChannels = numChannels;
+  profile.eChannelMode = OMX_AUDIO_ChannelModeMono;//OMX_AUDIO_ChannelModeStereo
+  profile.nSampleRate = sampleRate;
+  profile.nBitRate = bitRate;
+  profile.nAudioBandWidth = 0;
+  profile.nFrameLength = 0;
+  profile.nAACtools = OMX_AUDIO_AACToolAll;
+  profile.nAACERtools = OMX_AUDIO_AACERNone;
+  profile.eAACProfile = (OMX_AUDIO_AACPROFILETYPE)OMX_AUDIO_AACObjectNull;
+  profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
+  profile.nAACtools |= OMX_AUDIO_AACToolAndroidSSBR | OMX_AUDIO_AACToolAndroidDSBR;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
@@ -773,6 +837,10 @@ int32_t ad_main(int argc, char *argv[]) {
   omx_ctx->fp_encoded = fopen("32k-mono-16width.aac", "r");
   omx_ctx->fp_len = fopen("32k-mono-16width-aac.len", "r");
 
+  OMX_U32 numChannels = 1;
+  OMX_U32 sampleRate = 32000;
+  OMX_U32 bitRate = 8000;
+
   OMX_CALLBACKTYPE omx_cb;
   omx_cb.EventHandler = sEventHandler;
   omx_cb.FillBufferDone = sFillBufferDone;
@@ -794,11 +862,67 @@ int32_t ad_main(int argc, char *argv[]) {
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
+  OMX_AUDIO_PARAM_AACPROFILETYPE profile;
+  InitOMXParams(&profile);
+  profile.nPortIndex = 0;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  profile.nChannels = numChannels;
+  profile.nSampleRate = sampleRate;
+  profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_AUDIO_PARAM_ANDROID_AACPRESENTATIONTYPE presentation;
+  presentation.nMaxOutputChannels = 6;
+  presentation.nDrcCut = -1;
+  presentation.nDrcBoost = -1;
+  presentation.nHeavyCompression = -1;
+  presentation.nTargetReferenceLevel = -1;
+  presentation.nEncodedTargetLevel = -1;
+  presentation.nPCMLimiterEnable = -1;
+  oRet = OMX_SetParameter(pHandle, (OMX_INDEXTYPE)OMX_IndexParamAudioAndroidAacPresentation, &presentation);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  //OMX_AUDIO_PARAM_AACPROFILETYPE profile;
+  InitOMXParams(&profile);
+  profile.nPortIndex = 0;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  profile.nChannels = numChannels;
+  profile.eChannelMode = OMX_AUDIO_ChannelModeMono;//OMX_AUDIO_ChannelModeStereo
+  profile.nSampleRate = sampleRate;
+  profile.nBitRate = bitRate;
+  profile.nAudioBandWidth = 0;
+  profile.nFrameLength = 0;
+  profile.nAACtools = OMX_AUDIO_AACToolAll;
+  profile.nAACERtools = OMX_AUDIO_AACERNone;
+  profile.eAACProfile = (OMX_AUDIO_AACPROFILETYPE)OMX_AUDIO_AACObjectNull;
+  profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
+  profile.nAACtools |= OMX_AUDIO_AACToolAndroidSSBR | OMX_AUDIO_AACToolAndroidDSBR;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
   def.nPortIndex = 1;
   oRet = OMX_GetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
+  def.format.audio.eEncoding = OMX_AUDIO_CodingPCM;
   DumpPortDefine(&def);
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_AUDIO_PARAM_PCMMODETYPE pcmParams;
+  InitOMXParams(&pcmParams);
+  pcmParams.nPortIndex = 1;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioPcm, &pcmParams);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  pcmParams.nChannels = numChannels;
+  pcmParams.eNumData = OMX_NumericalDataSigned;
+  pcmParams.bInterleaved = OMX_TRUE;
+  pcmParams.nBitPerSample = 16;
+  pcmParams.nSamplingRate = sampleRate;
+  pcmParams.ePCMMode = OMX_AUDIO_PCMModeLinear;
+  pcmParams.eChannelMapping[0]=OMX_AUDIO_ChannelCF;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioPcm, &pcmParams);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
