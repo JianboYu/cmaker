@@ -59,9 +59,7 @@ class VerifyingRtxReceiver : public NullRtpData {
     if (!_sequence_numbers.empty())
       CHECK_EQ(kTestSsrc, (int32_t)rtp_header->header.ssrc);
     _sequence_numbers.push_back(rtp_header->header.sequenceNumber);
-    log_verbose("tag", "payload data: %08x %08x %08x %08x\n",
-                  *((uint32_t*)data), *((uint32_t*)data+1),
-                  *((uint32_t*)data+2), *((uint32_t*)data+3));
+    log_verbose("tag", "Recevied payload data addr: %p size: %d\n", data, size);
     return 0;
   }
   std::list<uint16_t> _sequence_numbers;
@@ -73,7 +71,7 @@ public:
   virtual ~TestRtpFeedback() {}
 
   void OnIncomingSSRCChanged(const uint32_t ssrc) override {
-    printf("OnIncomingSSRCChanged..\n");
+    logv("OnIncomingSSRCChanged..\n");
     //rtp_rtcp_->SetRemoteSSRC(ssrc);
   }
 
@@ -96,10 +94,10 @@ public:
   virtual bool SendRtp(const uint8_t* packet,
                        size_t length,
                        const PacketOptions& options) {
-    printf("SendRtp...---%08d\n", _count);
+    logv("SendRtp idx: %08d addr: %p size: %d\n", _count, packet, length);
     _count++;
     const unsigned char* ptr = static_cast<const unsigned char*>(packet);
-    DumpRTPHeader((uint8_t*)ptr);
+    //DumpRTPHeader((uint8_t*)ptr);
     uint32_t ssrc = (ptr[8] << 24) + (ptr[9] << 16) + (ptr[10] << 8) + ptr[11];
     if (ssrc == _rtx_ssrc)
       _count_rtx_ssrc++;
@@ -259,35 +257,33 @@ bool thread_loop(void *ctx) {
     }
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
-    logv("EmptyThisBuffer: %p\n", pBuffer);
+    logi("EmptyThisBuffer: %p\n", pBuffer);
     omx_ctx->ts += 3600;
   }
 
   pdata = NULL;
   cirq_dequeue(omx_ctx->fbd, &pdata);
   pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
-  if (pBuffer ) {
+  if (pBuffer) {
     if (pBuffer->nFilledLen > 0) {
-#if 0
-      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
-      CHECK_EQ(writed, pBuffer->nFilledLen);
-      writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
-      CHECK_GT(writed, 0);
-      fflush(omx_ctx->fp_encoded);
-      fflush(omx_ctx->fp_len);
-#else
+      RTPFragmentationHeader fragment;
+      fragment.VerifyAndAllocateFragmentationHeader(1);
+      fragment.fragmentationLength[0] = pBuffer->nFilledLen;
+      fragment.fragmentationOffset[0] = 0;
+      fragment.fragmentationTimeDiff[0] = 0;
+      fragment.fragmentationPlType[0] = 0;
+
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      kVideoFrameDelta, kPayloadType, pBuffer->nTimeStamp,
-                     pBuffer->nTimeStamp / 90, pBuffer->pBuffer, pBuffer->nFilledLen, NULL, NULL);
+                     pBuffer->nTimeStamp / 90, pBuffer->pBuffer, pBuffer->nFilledLen, &fragment, NULL);
       CHECK_EQ(0, ret);
-#endif
     }
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 0;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
-    logv("FillThisBuffer: %p\n", pBuffer);
+    logi("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
   os_msleep(40);
@@ -315,6 +311,7 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
 }
 
 int32_t main(int argc, char *argv[]) {
+  log_setlevel(eLogInfo);
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   oRet = OMX_Init();
   CHECK_EQ(oRet, OMX_ErrorNone);
@@ -330,9 +327,11 @@ int32_t main(int argc, char *argv[]) {
   OMXContext *omx_ctx = (OMXContext*)malloc(sizeof(OMXContext));
   CHECK(omx_ctx);
   int32_t status = -1;
-  status = cirq_create(&omx_ctx->fbd, 2);
+  int32_t input_buffer_num = 2;
+  int32_t output_buffer_num = 2;
+  status = cirq_create(&omx_ctx->fbd, input_buffer_num);
   CHECK_EQ(0, status);
-  status = cirq_create(&omx_ctx->ebd, 2);
+  status = cirq_create(&omx_ctx->ebd, output_buffer_num);
   CHECK_EQ(0, status);
   omx_ctx->thread = os::Thread::Create(thread_loop, omx_ctx);
   omx_ctx->ts = 3600;
@@ -389,7 +388,7 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
-  for (int32_t i = 0; i < 2; ++i) {
+  for (int32_t i = 0; i < input_buffer_num; ++i) {
     oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1280*720*3 >> 1);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->inBuffer[i]);
@@ -397,7 +396,7 @@ int32_t main(int argc, char *argv[]) {
         0, i, omx_ctx->inBuffer[i]->pBuffer, omx_ctx->inBuffer[i]->nFilledLen);
   }
 
-  for (int32_t i = 0; i < 2; ++i) {
+  for (int32_t i = 0; i < output_buffer_num; ++i) {
     oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->outBuffer[i], 1, NULL, 1280*720*3 >> 1);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->outBuffer[i]);
@@ -407,7 +406,7 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateExecuting, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
-  for (int32_t i = 0; i < 2; ++i) {
+  for (int32_t i = 0; i < input_buffer_num; ++i) {
     int32_t status = cirq_enqueue(omx_ctx->ebd, omx_ctx->inBuffer[i]);
     CHECK_EQ(0, status);
     status = cirq_enqueue(omx_ctx->fbd, omx_ctx->outBuffer[i]);
@@ -491,11 +490,11 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
-  for (int32_t i = 0; i < 2; ++i) {
+  for (int32_t i = 0; i < input_buffer_num; ++i) {
     oRet = OMX_FreeBuffer(pHandle, 0, omx_ctx->inBuffer[i]);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  for (int32_t i = 0; i < 2; ++i) {
+  for (int32_t i = 0; i < output_buffer_num; ++i) {
     oRet = OMX_FreeBuffer(pHandle, 1, omx_ctx->outBuffer[i]);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }

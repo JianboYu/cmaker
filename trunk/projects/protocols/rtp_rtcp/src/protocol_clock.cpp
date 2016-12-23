@@ -11,11 +11,11 @@
 #include "protocol_timeutils.h"
 #include "protocol_clock.h"
 
-#if defined(OS_WINDOWS)
+#if defined(_OS_WINDOWS)
 // Windows needs to be included before mmsystem.h
 #include "webrtc/base/win32.h"
 #include <MMSystem.h>
-#elif ((defined OS_LINUX) || (defined OS_MAC))
+#elif ((defined _OS_LINUX) || (defined _OS_MAC))
 #include <sys/time.h>
 #include <time.h>
 #endif
@@ -191,7 +191,7 @@ class WindowsRealTimeClock : public RealTimeClock {
   const ReferencePoint ref_point_;
 };
 
-#elif ((defined OS_LINUX) || (defined OS_MAC))
+#elif ((defined _OS_LINUX) || (defined _OS_MAC))
 class UnixRealTimeClock : public RealTimeClock {
  public:
   UnixRealTimeClock() {}
@@ -229,7 +229,7 @@ Clock* Clock::GetRealTimeClock() {
     delete clock;
   }
   return g_shared_clock;
-#elif defined(OS_LINUX) || defined(OS_MAC)
+#elif defined(_OS_LINUX) || defined(_OS_MAC)
   static UnixRealTimeClock clock;
   return &clock;
 #else
