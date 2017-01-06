@@ -80,6 +80,7 @@ int32_t MemoryPoolImpl::destroy_slot(int32_t slot) {
   pSlot->mutex->lock();
   if (pSlot->mem.size() != pSlot->mem_free.size()) {
     // not all mem returned
+    pSlot->mutex->unlock();
     return -2;
   }
 

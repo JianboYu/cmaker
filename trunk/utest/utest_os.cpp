@@ -3,6 +3,7 @@
 #include <os_assert.h>
 #include <os_thread.h>
 #include <os_time.h>
+#include <os_socket.h>
 #include <core_scoped_ptr.h>
 
 using namespace os;
@@ -40,6 +41,18 @@ int32_t main(int32_t argc, char *argv[]) {
   pthread->start(tid);
   log_verbose("tag", "created thread tid: %d\n", tid);
 
+  IPAddress ip_addr(123456);
+  log_verbose("tag", "ip: %s\n", ip_addr.ToString().c_str());
+
+  SocketAddress socket_addr(ip_addr, 50);
+  socket_addr.SetIP("172.16.1.88");
+  socket_addr.SetPort(18008);
+  log_verbose("tag", "socket addr: %s \n", socket_addr.ToString().c_str());
+
+  Socket *socket = Socket::Create(AF_INET6, SOCK_DGRAM);
+  CHECK_EQ(0, socket->Bind(socket_addr));
+  SocketAddress socket_addr2 = socket->GetLocalAddress();
+  log_verbose("tag", "socket addr22: %s \n", socket_addr2.ToString().c_str());
   while(1) {
     os_msleep(1000);
     mutex->lock();
