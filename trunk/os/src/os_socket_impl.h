@@ -22,13 +22,13 @@ enum DispatcherEvent {
   DE_ACCEPT  = 0x0010,
 };
 
-class PhysicalSocket : public Socket {
+class SocketImpl : public Socket {
  public:
-  PhysicalSocket();
-  ~PhysicalSocket() override;
+  SocketImpl(SOCKET s = INVALID_SOCKET);
+  ~SocketImpl() override;
 
   // Creates the underlying OS socket (same as the "socket" function).
-  virtual bool Create(int family, int type);
+  virtual bool Create(int family, int type, int protocol);
 
   SocketAddress GetLocalAddress() const override;
   SocketAddress GetRemoteAddress() const override;
@@ -56,7 +56,7 @@ class PhysicalSocket : public Socket {
                int64_t* timestamp) override;
 
   int Listen(int backlog) override;
-  int Accept(SocketAddress* out_addr) override;
+  Socket* Accept(SocketAddress* out_addr) override;
 
   int Close() override;
 

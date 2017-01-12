@@ -122,16 +122,15 @@ SocketAddress EmptySocketAddressWithFamily(int family) {
   return SocketAddress();
 }
 
-Socket *Socket::Create(int family, int type) {
-  PhysicalSocket *ps = new PhysicalSocket();
-  CHECK_EQ(true, ps->Create(family, type));
+Socket *Socket::Create(int family, int type, int protocol) {
+  SocketImpl *ps = new SocketImpl();
+  CHECK_EQ(true, ps->Create(family, type, protocol));
   return ps;
 }
 
-PhysicalSocket::PhysicalSocket()
-  : enabled_events_(0), error_(0),
+SocketImpl::SocketImpl(SOCKET s)
+  : s_(s), enabled_events_(0), error_(0),
     state_(CS_CLOSED) {
-  s_ = INVALID_SOCKET;
 #if defined(_OS_WIN)
   // EnsureWinsockInit() ensures that winsock is initialized. The default
   // version of this function doesn't do anything because winsock is
@@ -148,15 +147,21 @@ PhysicalSocket::PhysicalSocket()
     CHECK(0 == getsockopt(s_, SOL_SOCKET, SO_TYPE, (SockOptArg)&type, &len));
     udp_ = (SOCK_DGRAM == type);
   }
+
+  crit_ = Mutex::Create();
 }
 
-PhysicalSocket::~PhysicalSocket() {
+SocketImpl::~SocketImpl() {
+  if (crit_) {
+    delete crit_;
+    crit_ = NULL;
+  }
   Close();
 }
 
-bool PhysicalSocket::Create(int family, int type) {
+bool SocketImpl::Create(int family, int type, int protocol) {
   Close();
-  s_ = ::socket(family, type, 0);
+  s_ = ::socket(family, type, protocol);
   udp_ = (SOCK_DGRAM == type);
   UpdateLastError();
   if (udp_)
@@ -164,13 +169,12 @@ bool PhysicalSocket::Create(int family, int type) {
   return s_ != INVALID_SOCKET;
 }
 
-SocketAddress PhysicalSocket::GetLocalAddress() const {
+SocketAddress SocketImpl::GetLocalAddress() const {
   sockaddr_storage addr_storage = {0};
   socklen_t addrlen = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
   int result = ::getsockname(s_, addr, &addrlen);
   SocketAddress address;
-  logv("GetLocalAddress: result: %d\n", result);
   if (result >= 0) {
     SocketAddressFromSockAddrStorage(addr_storage, &address);
   } else {
@@ -179,7 +183,7 @@ SocketAddress PhysicalSocket::GetLocalAddress() const {
   return address;
 }
 
-SocketAddress PhysicalSocket::GetRemoteAddress() const {
+SocketAddress SocketImpl::GetRemoteAddress() const {
   sockaddr_storage addr_storage = {0};
   socklen_t addrlen = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
@@ -193,10 +197,11 @@ SocketAddress PhysicalSocket::GetRemoteAddress() const {
   return address;
 }
 
-int PhysicalSocket::Bind(const SocketAddress& bind_addr) {
+int SocketImpl::Bind(const SocketAddress& bind_addr) {
   sockaddr_storage addr_storage;
   size_t len = bind_addr.ToSockAddrStorage(&addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
+
   int err = ::bind(s_, addr, static_cast<int>(len));
   UpdateLastError();
 #if !defined(NDEBUG)
@@ -208,7 +213,7 @@ int PhysicalSocket::Bind(const SocketAddress& bind_addr) {
   return err;
 }
 
-int PhysicalSocket::Connect(const SocketAddress& addr) {
+int SocketImpl::Connect(const SocketAddress& addr) {
   // TODO(pthatcher): Implicit creation is required to reconnect...
   // ...but should we make it more explicit?
   if (state_ != CS_CLOSED) {
@@ -218,9 +223,9 @@ int PhysicalSocket::Connect(const SocketAddress& addr) {
   return DoConnect(addr);
 }
 
-int PhysicalSocket::DoConnect(const SocketAddress& connect_addr) {
+int SocketImpl::DoConnect(const SocketAddress& connect_addr) {
   if ((s_ == INVALID_SOCKET) &&
-      !Create(connect_addr.family(), SOCK_STREAM)) {
+      !Create(connect_addr.family(), SOCK_STREAM, IPPROTO_TCP)) {
     return SOCKET_ERROR;
   }
   sockaddr_storage addr_storage;
@@ -241,21 +246,21 @@ int PhysicalSocket::DoConnect(const SocketAddress& connect_addr) {
   return 0;
 }
 
-int PhysicalSocket::GetError() const {
+int SocketImpl::GetError() const {
   AutoLock cs(crit_);
   return error_;
 }
 
-void PhysicalSocket::SetError(int error) {
+void SocketImpl::SetError(int error) {
   AutoLock cs(crit_);
   error_ = error;
 }
 
-Socket::ConnState PhysicalSocket::GetState() const {
+Socket::ConnState SocketImpl::GetState() const {
   return state_;
 }
 
-int PhysicalSocket::GetOption(Option opt, int* value) {
+int SocketImpl::GetOption(Option opt, int* value) {
   int slevel;
   int sopt;
   if (TranslateOption(opt, &slevel, &sopt) == -1)
@@ -263,30 +268,30 @@ int PhysicalSocket::GetOption(Option opt, int* value) {
   socklen_t optlen = sizeof(*value);
   int ret = ::getsockopt(s_, slevel, sopt, (SockOptArg)value, &optlen);
   if (ret != -1 && opt == OPT_DONTFRAGMENT) {
-#if defined(WEBRTC_LINUX) && !defined(WEBRTC_ANDROID)
+#if defined(_OS_LINUX) && !defined(_OS_ANDROID)
     *value = (*value != IP_PMTUDISC_DONT) ? 1 : 0;
 #endif
   }
   return ret;
 }
 
-int PhysicalSocket::SetOption(Option opt, int value) {
+int SocketImpl::SetOption(Option opt, int value) {
   int slevel;
   int sopt;
   if (TranslateOption(opt, &slevel, &sopt) == -1)
     return -1;
   if (opt == OPT_DONTFRAGMENT) {
-#if defined(WEBRTC_LINUX) && !defined(WEBRTC_ANDROID)
+#if defined(_OS_LINUX) && !defined(_OS_ANDROID)
     value = (value) ? IP_PMTUDISC_DO : IP_PMTUDISC_DONT;
 #endif
   }
   return ::setsockopt(s_, slevel, sopt, (SockOptArg)&value, sizeof(value));
 }
 
-int PhysicalSocket::Send(const void* pv, size_t cb) {
+int SocketImpl::Send(const void* pv, size_t cb) {
   int sent = DoSend(s_, reinterpret_cast<const char *>(pv),
       static_cast<int>(cb),
-#if defined(WEBRTC_LINUX) && !defined(WEBRTC_ANDROID)
+#if defined(_OS_LINUX) && !defined(_OS_ANDROID)
       // Suppress SIGPIPE. Without this, attempting to send on a socket whose
       // other end is closed will result in a SIGPIPE signal being raised to
       // our process, which by default will terminate the process, which we
@@ -308,14 +313,14 @@ int PhysicalSocket::Send(const void* pv, size_t cb) {
   return sent;
 }
 
-int PhysicalSocket::SendTo(const void* buffer,
+int SocketImpl::SendTo(const void* buffer,
                            size_t length,
                            const SocketAddress& addr) {
   sockaddr_storage saddr;
   size_t len = addr.ToSockAddrStorage(&saddr);
   int sent = DoSendTo(
       s_, static_cast<const char *>(buffer), static_cast<int>(length),
-#if defined(WEBRTC_LINUX) && !defined(WEBRTC_ANDROID)
+#if defined(_OS_LINUX) && !defined(_OS_ANDROID)
       // Suppress SIGPIPE. See above for explanation.
       MSG_NOSIGNAL,
 #else
@@ -333,7 +338,7 @@ int PhysicalSocket::SendTo(const void* buffer,
   return sent;
 }
 
-int PhysicalSocket::Recv(void* buffer, size_t length, int64_t* timestamp) {
+int SocketImpl::Recv(void* buffer, size_t length, int64_t* timestamp) {
   int received = ::recv(s_, static_cast<char*>(buffer),
                         static_cast<int>(length), 0);
   if ((received == 0) && (length != 0)) {
@@ -362,7 +367,7 @@ int PhysicalSocket::Recv(void* buffer, size_t length, int64_t* timestamp) {
   return received;
 }
 
-int PhysicalSocket::RecvFrom(void* buffer,
+int SocketImpl::RecvFrom(void* buffer,
                              size_t length,
                              SocketAddress* out_addr,
                              int64_t* timestamp) {
@@ -388,7 +393,7 @@ int PhysicalSocket::RecvFrom(void* buffer,
   return received;
 }
 
-int PhysicalSocket::Listen(int backlog) {
+int SocketImpl::Listen(int backlog) {
   int err = ::listen(s_, backlog);
   UpdateLastError();
   if (err == 0) {
@@ -399,10 +404,11 @@ int PhysicalSocket::Listen(int backlog) {
     dbg_addr_.append(GetLocalAddress().ToString());
 #endif
   }
+
   return err;
 }
 
-int PhysicalSocket::Accept(SocketAddress* out_addr) {
+Socket* SocketImpl::Accept(SocketAddress* out_addr) {
   // Always re-subscribe DE_ACCEPT to make sure new incoming connections will
   // trigger an event even if DoAccept returns an error here.
   enabled_events_ |= DE_ACCEPT;
@@ -410,13 +416,14 @@ int PhysicalSocket::Accept(SocketAddress* out_addr) {
   socklen_t addr_len = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
   SOCKET s = DoAccept(s_, addr, &addr_len);
-  UpdateLastError();
+  SocketAddressFromSockAddrStorage(addr_storage, out_addr);
+  //UpdateLastError();
   if (s == INVALID_SOCKET)
-    return -1;
-  return 0;
+    return NULL;
+  return new SocketImpl(s);
 }
 
-int PhysicalSocket::Close() {
+int SocketImpl::Close() {
   if (s_ == INVALID_SOCKET)
     return 0;
   int err = ::closesocket(s_);
@@ -427,7 +434,7 @@ int PhysicalSocket::Close() {
   return err;
 }
 
-int PhysicalSocket::EstimateMTU(uint16_t* mtu) {
+int SocketImpl::EstimateMTU(uint16_t* mtu) {
   SocketAddress addr = GetRemoteAddress();
   if (addr.IsAnyIP()) {
     SetError(ENOTCONN);
@@ -464,14 +471,14 @@ int PhysicalSocket::EstimateMTU(uint16_t* mtu) {
 
   CHECK(false);
   return -1;
-#elif defined(WEBRTC_MAC)
+#elif defined(_OS_MAC)
   // No simple way to do this on Mac OS X.
   // SIOCGIFMTU would work if we knew which interface would be used, but
   // figuring that out is pretty complicated. For now we'll return an error
   // and let the caller pick a default MTU.
   SetError(EINVAL);
   return -1;
-#elif defined(WEBRTC_LINUX)
+#elif defined(_OS_LINUX)
   // Gets the path MTU.
   int value;
   socklen_t vlen = sizeof(value);
@@ -492,17 +499,17 @@ int PhysicalSocket::EstimateMTU(uint16_t* mtu) {
   return 0;
 }
 
-SOCKET PhysicalSocket::DoAccept(SOCKET socket,
+SOCKET SocketImpl::DoAccept(SOCKET socket,
                                 sockaddr* addr,
                                 socklen_t* addrlen) {
   return ::accept(socket, addr, addrlen);
 }
 
-int PhysicalSocket::DoSend(SOCKET socket, const char* buf, int len, int flags) {
+int SocketImpl::DoSend(SOCKET socket, const char* buf, int len, int flags) {
   return ::send(socket, buf, len, flags);
 }
 
-int PhysicalSocket::DoSendTo(SOCKET socket,
+int SocketImpl::DoSendTo(SOCKET socket,
                              const char* buf,
                              int len,
                              int flags,
@@ -511,12 +518,14 @@ int PhysicalSocket::DoSendTo(SOCKET socket,
   return ::sendto(socket, buf, len, flags, dest_addr, addrlen);
 }
 
-void PhysicalSocket::UpdateLastError() {
-  //SetError(LAST_SYSTEM_ERROR);
+void SocketImpl::UpdateLastError() {
+#ifdef _OS_POSIX
+  SetError(errno);
+#endif
 }
 
-void PhysicalSocket::MaybeRemapSendError() {
-#if defined(WEBRTC_MAC)
+void SocketImpl::MaybeRemapSendError() {
+#if defined(_OS_MAC)
   // https://developer.apple.com/library/mac/documentation/Darwin/
   // Reference/ManPages/man2/sendto.2.html
   // ENOBUFS - The output queue for a network interface is full.
@@ -528,14 +537,14 @@ void PhysicalSocket::MaybeRemapSendError() {
 #endif
 }
 
-int PhysicalSocket::TranslateOption(Option opt, int* slevel, int* sopt) {
+int SocketImpl::TranslateOption(Option opt, int* slevel, int* sopt) {
   switch (opt) {
     case OPT_DONTFRAGMENT:
 #if defined(_OS_WIN)
       *slevel = IPPROTO_IP;
       *sopt = IP_DONTFRAGMENT;
       break;
-#elif defined(WEBRTC_MAC) || defined(BSD) || defined(__native_client__)
+#elif defined(_OS_MAC) || defined(BSD) || defined(__native_client__)
       logv("Socket::OPT_DONTFRAGMENT not supported.\n");
       return -1;
 #elif defined(_OS_POSIX)

@@ -45,14 +45,20 @@ int32_t main(int32_t argc, char *argv[]) {
   log_verbose("tag", "ip: %s\n", ip_addr.ToString().c_str());
 
   SocketAddress socket_addr(ip_addr, 50);
-  socket_addr.SetIP("172.16.1.88");
-  socket_addr.SetPort(18008);
+  socket_addr.SetIP("127.0.0.1");
+  socket_addr.SetPort(8008);
   log_verbose("tag", "socket addr: %s \n", socket_addr.ToString().c_str());
 
-  Socket *socket = Socket::Create(AF_INET6, SOCK_DGRAM);
+  scoped_ptr<Socket> socket(Socket::Create(AF_INET, SOCK_STREAM/*SOCK_DGRAM*/, IPPROTO_TCP));
+  //SocketAddress socket_addr2 = socket->GetLocalAddress();
+  //log_verbose("tag", "socket addr: %s \n", socket_addr2.ToString().c_str());
+
   CHECK_EQ(0, socket->Bind(socket_addr));
-  SocketAddress socket_addr2 = socket->GetLocalAddress();
-  log_verbose("tag", "socket addr22: %s \n", socket_addr2.ToString().c_str());
+  CHECK_EQ(0, socket->Listen(5));
+  SocketAddress client_socket_addr;
+  Socket *client = socket->Accept(&client_socket_addr);
+  CHECK(client);
+  log_verbose("tag", "client socket addr: %s \n", client_socket_addr.ToString().c_str());
   while(1) {
     os_msleep(1000);
     mutex->lock();

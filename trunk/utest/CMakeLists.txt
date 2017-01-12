@@ -19,6 +19,16 @@ ADD_EXECUTABLE(os_utest ${OS_TEST_SRC})
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 TARGET_LINK_LIBRARIES(os_utest libos)
 
+SET(UTILITY_TEST_SRC utest_socket_client.cpp)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/os/inc)
+ADD_EXECUTABLE(utility_socket_client ${UTILITY_TEST_SRC})
+TARGET_LINK_LIBRARIES(utility_socket_client libos)
+
+SET(UTILITY_TEST_SRC utest_socket_server.cpp)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/os/inc)
+ADD_EXECUTABLE(utility_socket_server ${UTILITY_TEST_SRC})
+TARGET_LINK_LIBRARIES(utility_socket_server libos)
+
 SET(UTILITY_TEST_SRC utest_utility.cpp)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/utility/inc)
 ADD_EXECUTABLE(utility_utest ${UTILITY_TEST_SRC})

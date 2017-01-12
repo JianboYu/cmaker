@@ -114,38 +114,52 @@
 
 inline uint32_t HostToNetwork32(uint32_t n) {
   uint32_t result = 0;
+#if 0
   uint8_t *p = (uint8_t*)&result;
   *p = (n >> 24) & 0xff;
   *(p+1) = (n >> 16) & 0xff;
   *(p+2) = (n >> 8) & 0xff;
   *(p+3) = (n >> 0) & 0xff;
+#else
+  result = htonl(n);
+#endif
 
   return result;
 }
 inline uint16_t HostToNetwork16(uint16_t n) {
   uint16_t result = 0;
+#if 0
   uint8_t *p = (uint8_t*)&result;
   *(p+2) = (n >> 8) & 0xff;
   *(p+3) = (n >> 0) & 0xff;
-
+#else
+  result = htons(n);
+#endif
   return result;
 }
 inline uint32_t NetworkToHost32(uint32_t n) {
   uint32_t result = 0;
+#if 0
   uint8_t *p = (uint8_t*)&result;
   *p = (n >> 0) & 0xff;
   *(p+1) = (n >> 8) & 0xff;
   *(p+2) = (n >> 16) & 0xff;
   *(p+3) = (n >> 24) & 0xff;
-
+#else
+  result = ntohl(n);
+#endif
   return result;
 }
 
 inline uint16_t NetworkToHost16(uint16_t n) {
   uint16_t result = 0;
+#if 0
   uint8_t *p = (uint8_t*)&result;
   *p = (n >> 0) & 0xff;
   *(p+1) = (n >> 8) & 0xff;
+#else
+  result = ntohs(n);
+#endif
 
   return result;
 }
@@ -405,7 +419,7 @@ class Socket {
  public:
   virtual ~Socket() {}
 
-  static Socket *Create(int family, int type);
+  static Socket *Create(int family, int type, int protocol);
 
   // Returns the address to which the socket is bound.  If the socket is not
   // bound, then the any-address is returned.
@@ -425,7 +439,7 @@ class Socket {
                        SocketAddress* paddr,
                        int64_t* timestamp) = 0;
   virtual int Listen(int backlog) = 0;
-  virtual int Accept(SocketAddress *paddr) = 0;
+  virtual Socket* Accept(SocketAddress *paddr) = 0;
   virtual int Close() = 0;
   virtual int GetError() const = 0;
   virtual void SetError(int error) = 0;
