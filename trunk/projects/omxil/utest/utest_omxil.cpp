@@ -112,7 +112,7 @@ bool encoder_loop(void *ctx) {
       uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
       CHECK_EQ(writed, pBuffer->nFilledLen);
       writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
-      CHECK_GT(writed, 0);
+      CHECK_GT(writed, (uint32_t)0);
       fflush(omx_ctx->fp_encoded);
       fflush(omx_ctx->fp_len);
     }
@@ -546,7 +546,7 @@ bool audio_encoder_loop(void *ctx) {
       uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
       CHECK_EQ(writed, pBuffer->nFilledLen);
       writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
-      CHECK_GT(writed, 0);
+      CHECK_GT(writed, (uint32_t)0);
       fflush(omx_ctx->fp_encoded);
       fflush(omx_ctx->fp_len);
     }

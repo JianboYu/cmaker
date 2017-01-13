@@ -21,13 +21,13 @@ TARGET_LINK_LIBRARIES(os_utest libos)
 
 SET(UTILITY_TEST_SRC utest_socket_client.cpp)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/os/inc)
-ADD_EXECUTABLE(utility_socket_client ${UTILITY_TEST_SRC})
-TARGET_LINK_LIBRARIES(utility_socket_client libos)
+ADD_EXECUTABLE(socket_client_utest ${UTILITY_TEST_SRC})
+TARGET_LINK_LIBRARIES(socket_client_utest libos)
 
 SET(UTILITY_TEST_SRC utest_socket_server.cpp)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/os/inc)
-ADD_EXECUTABLE(utility_socket_server ${UTILITY_TEST_SRC})
-TARGET_LINK_LIBRARIES(utility_socket_server libos)
+ADD_EXECUTABLE(socket_server_utest ${UTILITY_TEST_SRC})
+TARGET_LINK_LIBRARIES(socket_server_utest libos)
 
 SET(UTILITY_TEST_SRC utest_utility.cpp)
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/utility/inc)

@@ -318,7 +318,7 @@ OMX_ERRORTYPE SimpleSoftOMXComponent::getState(OMX_STATETYPE *state) {
 }
 
 void SimpleSoftOMXComponent::onMessageReceived() {
-    CHECK_GT(mMsg.size(), 0);
+    CHECK_GT(mMsg.size(), (uint32_t)0);
     MessageInfo msg = mMsg.front();
     mMsg.pop_front();
 
