@@ -44,9 +44,17 @@ class VerifyingRtxReceiver : public NullRtpData {
     if (!_sequence_numbers.empty())
       CHECK_EQ(kTestSsrc, (int32_t)rtp_header->header.ssrc);
     _sequence_numbers.push_back(rtp_header->header.sequenceNumber);
-    log_verbose("tag", "payload data: %08x %08x %08x %08x\n",
-                  *((uint32_t*)data), *((uint32_t*)data+1),
-                  *((uint32_t*)data+2), *((uint32_t*)data+3));
+#if 0
+    log_verbose("tag", "data addr: %p size: %d\n", data, size);
+    log_verbose("tag", "payload data1: %08x\n", *((uint32_t*)data));
+    log_verbose("tag", "payload data2: %08x\n", *((uint32_t*)data+1));
+    log_verbose("tag", "payload data3: %08x\n", *((uint32_t*)data+2));
+    log_verbose("tag", "payload data4: %08x\n", *((uint32_t*)data+3));
+#else
+    log_verbose("tag", "payload data: %08x\n",
+                  *((uint32_t*)data)
+                  );
+#endif
     return 0;
   }
   std::list<uint16_t> _sequence_numbers;

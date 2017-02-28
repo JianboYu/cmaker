@@ -649,6 +649,10 @@ bool SimpleSoftOMXComponent::MsgThread() {
       return true;
   }
 
+  //BUG: fix me for size == 0 case
+  if(mMsg.size() <= 0)
+    return true;
+
   onMessageReceived();
   return true;
 }

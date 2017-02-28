@@ -34,7 +34,8 @@ int32_t log_getlevel() {
 
 static void os_printf(int32_t level, const char *tag, const char *fmt, va_list args) {
 #if defined(_OS_ANDROID)
-  __android_log_vprint(ANDROID_LOG_ERROR, LOG_TAG, fmt, args);
+  //__android_log_vprint(ANDROID_LOG_ERROR, LOG_TAG, fmt, args);
+  vfprintf(stderr, fmt, args);
 #else
   vfprintf(stderr, fmt, args);
 #endif

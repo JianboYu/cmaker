@@ -203,6 +203,49 @@ if (ARCH_x86_64)
       "common/x86/ih264_weighted_pred_sse42.c"
       "common/x86/ih264_ihadamard_scaling_sse42.c")
 elseif(ARCH_arm)
+  SET(ARCH_CFLAGS "-DARM")
+  SET(ARCH "arm")
+  #ENABLE_LANGUAGE(C ASM)
+
+  SET(avcd_src_arch_c
+      "decoder/arm/ih264d_function_selector.c")
+
+  if(ARCH_ARM_HAVE_NEON)
+    SET(avcd_src_arch_c "${avce_src_arch_c}"
+      "decoder/arm/ih264d_function_selector_a9q.c")
+
+    SET(avcd_src_arch_asm "${avcd_src_arch_asm}"
+      "common/arm/ih264_intra_pred_chroma_a9q.s"
+      "common/arm/ih264_intra_pred_luma_16x16_a9q.s"
+      "common/arm/ih264_intra_pred_luma_4x4_a9q.s"
+      "common/arm/ih264_intra_pred_luma_8x8_a9q.s"
+      "common/arm/ih264_inter_pred_chroma_a9q.s"
+      "common/arm/ih264_inter_pred_filters_luma_horz_a9q.s"
+      "common/arm/ih264_inter_pred_filters_luma_vert_a9q.s"
+      "common/arm/ih264_inter_pred_luma_copy_a9q.s"
+      "common/arm/ih264_inter_pred_luma_horz_qpel_a9q.s"
+      "common/arm/ih264_inter_pred_luma_vert_qpel_a9q.s"
+      "common/arm/ih264_inter_pred_luma_horz_hpel_vert_hpel_a9q.s"
+      "common/arm/ih264_inter_pred_luma_horz_qpel_vert_qpel_a9q.s"
+      "common/arm/ih264_inter_pred_luma_horz_qpel_vert_hpel_a9q.s"
+      "common/arm/ih264_inter_pred_luma_horz_hpel_vert_qpel_a9q.s"
+      "common/arm/ih264_default_weighted_pred_a9q.s"
+      "common/arm/ih264_weighted_pred_a9q.s"
+      "common/arm/ih264_weighted_bi_pred_a9q.s"
+      "common/arm/ih264_deblk_chroma_a9.s"
+      "common/arm/ih264_deblk_luma_a9.s"
+      "common/arm/ih264_padding_neon.s"
+      "common/arm/ih264_iquant_itrans_recon_a9.s"
+      "common/arm/ih264_iquant_itrans_recon_dc_a9.s"
+      "common/arm/ih264_ihadamard_scaling_a9.s")
+
+    SET(ARCH_CFLAGS "${ARCH_CFLAGS} -DDEFAULT_ARCH=D_ARCH_ARM_A9Q")
+  else(ARCH_ARM_HAVE_NEON) #No Neon
+    SET(ARCH_CFLAGS "${ARCH_CFLAGS} -DDISABLE_NEON -DDEFAULT_ARCH=D_ARCH_ARM_NONEON")
+  endif() #Neon check
+
+  SET(avcd_src_arch_asm "${avcd_src_arch_asm}"
+        "common/arm/ih264_arm_memory_barrier.s")
 endif()
 
 INCLUDE_DIRECTORIES(./decoder/ ./common ./decoder/${ARCH}/ ./common/${ARCH}/)
@@ -217,4 +260,4 @@ MESSAGE(INFO " libavcdec CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
 MESSAGE(INFO " libavcdec CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 SET_TARGET_PROPERTIES(libavcdec PROPERTIES OUTPUT_NAME "avcdec")
 
-ADD_SUBDIRECTORY(test)
+#ADD_SUBDIRECTORY(test)
