@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <os_mutex.h>
-#include <os_socket.h>
+#include <os_isocket.h>
 
 #if defined(_OS_POSIX)
 typedef int SOCKET;
@@ -22,7 +22,7 @@ enum DispatcherEvent {
   DE_ACCEPT  = 0x0010,
 };
 
-class SocketImpl : public Socket {
+class SocketImpl : public ISocket {
  public:
   SocketImpl(SOCKET s = INVALID_SOCKET);
   ~SocketImpl() override;
@@ -39,7 +39,7 @@ class SocketImpl : public Socket {
   int GetError() const override;
   void SetError(int error) override;
 
-  Socket::ConnState GetState() const override;
+  ISocket::ConnState GetState() const override;
 
   int GetOption(Option opt, int* value) override;
   int SetOption(Option opt, int value) override;
@@ -56,7 +56,7 @@ class SocketImpl : public Socket {
                int64_t* timestamp) override;
 
   int Listen(int backlog) override;
-  Socket* Accept(SocketAddress* out_addr) override;
+  ISocket* Accept(SocketAddress* out_addr) override;
 
   int Close() override;
 
@@ -85,7 +85,7 @@ class SocketImpl : public Socket {
   bool udp_;
   Mutex *crit_;
   int error_ GUARDED_BY(crit_);
-  Socket::ConnState state_;
+  ISocket::ConnState state_;
 
 #if !defined(NDEBUG)
   std::string dbg_addr_;

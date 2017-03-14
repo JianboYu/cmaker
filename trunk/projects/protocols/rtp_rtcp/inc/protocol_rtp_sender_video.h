@@ -23,7 +23,6 @@
 #include "protocol_rtp_utility.h"
 #include "protocol_rtp_sender.h"
 #include "protocol_onetimeevent.h"
-#include "protocol_video_codec_information.h"
 #include "protocol_forward_error_correction.h"
 #include "protocol_producer_fec.h"
 

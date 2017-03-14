@@ -1,5 +1,5 @@
 #include <os_assert.h>
-#include <os_socket_impl.h>
+#include <os_isocket_impl.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1300
 #pragma warning(disable:4786)
@@ -22,7 +22,7 @@
 #include <signal.h>
 #endif
 
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winsock2.h>
@@ -56,12 +56,12 @@ int64_t GetSocketRecvTimestamp(int socket) {
 }
 #endif
 
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
 typedef char* SockOptArg;
 #endif
 
 namespace os {
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
 // Standard MTUs, from RFC 1191
 const uint16_t PACKET_MAXIMUMS[] = {
     65535,  // Theoretical maximum, Hyperchannel
@@ -122,7 +122,7 @@ SocketAddress EmptySocketAddressWithFamily(int family) {
   return SocketAddress();
 }
 
-Socket *Socket::Create(int family, int type, int protocol) {
+ISocket *ISocket::Create(int family, int type, int protocol) {
   SocketImpl *ps = new SocketImpl();
   CHECK_EQ(true, ps->Create(family, type, protocol));
   return ps;
@@ -131,7 +131,7 @@ Socket *Socket::Create(int family, int type, int protocol) {
 SocketImpl::SocketImpl(SOCKET s)
   : s_(s), enabled_events_(0), error_(0),
     state_(CS_CLOSED) {
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
   // EnsureWinsockInit() ensures that winsock is initialized. The default
   // version of this function doesn't do anything because winsock is
   // initialized by constructor of a static object. If neccessary libjingle
@@ -256,7 +256,7 @@ void SocketImpl::SetError(int error) {
   error_ = error;
 }
 
-Socket::ConnState SocketImpl::GetState() const {
+ISocket::ConnState SocketImpl::GetState() const {
   return state_;
 }
 
@@ -408,7 +408,7 @@ int SocketImpl::Listen(int backlog) {
   return err;
 }
 
-Socket* SocketImpl::Accept(SocketAddress* out_addr) {
+ISocket* SocketImpl::Accept(SocketAddress* out_addr) {
   // Always re-subscribe DE_ACCEPT to make sure new incoming connections will
   // trigger an event even if DoAccept returns an error here.
   enabled_events_ |= DE_ACCEPT;
@@ -441,7 +441,7 @@ int SocketImpl::EstimateMTU(uint16_t* mtu) {
     return -1;
   }
 
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
   // Gets the interface MTU (TTL=1) for the interface used to reach |addr|.
   WinPing ping;
   if (!ping.IsValid()) {
@@ -540,7 +540,7 @@ void SocketImpl::MaybeRemapSendError() {
 int SocketImpl::TranslateOption(Option opt, int* slevel, int* sopt) {
   switch (opt) {
     case OPT_DONTFRAGMENT:
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
       *slevel = IPPROTO_IP;
       *sopt = IP_DONTFRAGMENT;
       break;
@@ -664,7 +664,7 @@ in_addr IPAddress::ipv4_address() const {
 }
 
 const char* inet_ntop(int af, const void *src, char* dst, socklen_t size) {
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
   return win32_inet_ntop(af, src, dst, size);
 #else
   return ::inet_ntop(af, src, dst, size);
@@ -672,7 +672,7 @@ const char* inet_ntop(int af, const void *src, char* dst, socklen_t size) {
 }
 
 int inet_pton(int af, const char* src, void *dst) {
-#if defined(_OS_WIN)
+#if defined(_OS_WINDOWS)
   return win32_inet_pton(af, src, dst);
 #else
   return ::inet_pton(af, src, dst);

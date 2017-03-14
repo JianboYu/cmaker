@@ -3,14 +3,14 @@
 #include <os_assert.h>
 #include <os_thread.h>
 #include <os_time.h>
-#include <os_socket.h>
+#include <os_isocket.h>
 #include <core_scoped_ptr.h>
 
 using namespace os;
 using namespace core;
 
 int32_t main(int32_t argc, char *argv[]) {
-  scoped_ptr<Socket> socket_client(Socket::Create(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+  scoped_ptr<ISocket> socket_client(ISocket::Create(AF_INET, SOCK_STREAM, IPPROTO_TCP));
   IPAddress ipaddr(0);
   SocketAddress socket_addr(ipaddr, 50);
   socket_addr.SetIP("127.0.0.1");

@@ -65,4 +65,17 @@ enum OS_ERROR {
 #define NULL (0)
 #endif
 
+// Socket defines
+#ifndef _OS_WINDOWS
+typedef int SOCKET;
+#endif
+
+#ifndef INVALID_SOCKET
+  #define INVALID_SOCKET  (SOCKET)(~0)
+  #ifndef AF_INET
+  #define AF_INET 2
+  #endif
+#endif
+
+
 #endif //_OS_TYPEDEFS_H_

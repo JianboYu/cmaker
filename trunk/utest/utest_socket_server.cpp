@@ -3,7 +3,7 @@
 #include <os_assert.h>
 #include <os_thread.h>
 #include <os_time.h>
-#include <os_socket.h>
+#include <os_isocket.h>
 #include <core_scoped_ptr.h>
 
 using namespace os;
@@ -17,14 +17,14 @@ int32_t main(int32_t argc, char *argv[]) {
 
   log_verbose("tag", "socket addr: %s \n", socket_addr.ToString().c_str());
 
-  Socket *socket = Socket::Create(AF_INET, SOCK_STREAM/*SOCK_DGRAM*/, IPPROTO_TCP);
+  ISocket *socket = ISocket::Create(AF_INET, SOCK_STREAM/*SOCK_DGRAM*/, IPPROTO_TCP);
   //SocketAddress socket_addr2 = socket->GetLocalAddress();
   //log_verbose("tag", "socket addr: %s \n", socket_addr2.ToString().c_str());
 
   CHECK_EQ(0, socket->Bind(socket_addr));
   CHECK_EQ(0, socket->Listen(5));
   SocketAddress client_socket_addr;
-  Socket *client = socket->Accept(&client_socket_addr);
+  ISocket *client = socket->Accept(&client_socket_addr);
   CHECK(client);
   log_verbose("tag", "client socket addr: %s \n", client_socket_addr.ToString().c_str());
 

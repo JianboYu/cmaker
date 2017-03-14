@@ -59,6 +59,22 @@ class VerifyingRtxReceiver : public NullRtpData {
     if (!_sequence_numbers.empty())
       CHECK_EQ(kTestSsrc, (int32_t)rtp_header->header.ssrc);
     _sequence_numbers.push_back(rtp_header->header.sequenceNumber);
+    //uint8_t numCSRCs;
+    //uint32_t arrOfCSRCs[kRtpCsrcSize];
+    //size_t paddingLength;
+    //size_t headerLength;
+    //int payload_type_frequency;
+    log_verbose("tag", "RTP header:\n");
+    log_verbose("tag", "  markebit: %d\n"
+                       "  payload: %d\n"
+                       "  seq: %d\n"
+                       "  ts: %d\n"
+                       "  ssrc: %08x\n",
+                rtp_header->header.markerBit,
+                rtp_header->header.payloadType,
+                rtp_header->header.sequenceNumber,
+                rtp_header->header.timestamp,
+                rtp_header->header.ssrc);
     log_verbose("tag", "Recevied payload data addr: %p size: %d\n", data, size);
     return 0;
   }
@@ -273,6 +289,7 @@ bool thread_loop(void *ctx) {
       fragment.fragmentationTimeDiff[0] = 0;
       fragment.fragmentationPlType[0] = 0;
 
+      logi("SendOutgoingData: %p size: %d\n", pBuffer->pBuffer, pBuffer->nFilledLen);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      kVideoFrameDelta, kPayloadType, pBuffer->nTimeStamp,
                      pBuffer->nTimeStamp / 90, pBuffer->pBuffer, pBuffer->nFilledLen, &fragment, NULL);
