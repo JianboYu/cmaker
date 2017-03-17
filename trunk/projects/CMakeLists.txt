@@ -1,4 +1,5 @@
 ADD_SUBDIRECTORY(protocols/rtp_rtcp)
+ADD_SUBDIRECTORY(protocols/rtmp)
 ADD_SUBDIRECTORY(omxil)
 
 if(THIRD_PARTY_ENABLE)
