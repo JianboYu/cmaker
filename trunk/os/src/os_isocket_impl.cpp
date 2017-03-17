@@ -1152,7 +1152,7 @@ bool SocketAddress::from_sock_addr(const sockaddr_in& saddr) {
   return true;
 }
 
-static int32_t to_sock_addr_storageHelper(sockaddr_storage* addr,
+static int32_t to_sock_addr_storage_helper(sockaddr_storage* addr,
                                       IPAddress ip,
                                       uint16_t port,
                                       int32_t scope_id) {
@@ -1174,10 +1174,10 @@ static int32_t to_sock_addr_storageHelper(sockaddr_storage* addr,
 }
 
 int32_t SocketAddress::to_dual_stack_sock_addr_storage(sockaddr_storage *addr) const {
-  return to_sock_addr_storageHelper(addr, _ip.as_ipv6_address(), _port, _scope_id);
+  return to_sock_addr_storage_helper(addr, _ip.as_ipv6_address(), _port, _scope_id);
 }
 
 int32_t SocketAddress::to_sock_addr_storage(sockaddr_storage* addr) const {
-  return to_sock_addr_storageHelper(addr, _ip, _port, _scope_id);
+  return to_sock_addr_storage_helper(addr, _ip, _port, _scope_id);
 }
 }  // namespace os
