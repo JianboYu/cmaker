@@ -15,25 +15,25 @@ int32_t main(int32_t argc, char *argv[]) {
   //socket_addr.SetIP("172.16.1.88");
   //socket_addr.SetPort(8000);
 
-  log_verbose("tag", "socket addr: %s \n", socket_addr.ToString().c_str());
+  log_verbose("tag", "socket addr: %s \n", socket_addr.to_string().c_str());
 
   ISocket *socket = ISocket::Create(AF_INET, SOCK_STREAM/*SOCK_DGRAM*/, IPPROTO_TCP);
   //SocketAddress socket_addr2 = socket->GetLocalAddress();
-  //log_verbose("tag", "socket addr: %s \n", socket_addr2.ToString().c_str());
+  //log_verbose("tag", "socket addr: %s \n", socket_addr2.to_string().c_str());
 
-  CHECK_EQ(0, socket->Bind(socket_addr));
-  CHECK_EQ(0, socket->Listen(5));
+  CHECK_EQ(0, socket->bind(socket_addr));
+  CHECK_EQ(0, socket->listen(5));
   SocketAddress client_socket_addr;
-  ISocket *client = socket->Accept(&client_socket_addr);
+  ISocket *client = socket->accept(&client_socket_addr);
   CHECK(client);
-  log_verbose("tag", "client socket addr: %s \n", client_socket_addr.ToString().c_str());
+  log_verbose("tag", "client socket addr: %s \n", client_socket_addr.to_string().c_str());
 
   uint8_t buf[1024] = {0};
   int64_t timestamp = 0;
   while(1) {
-    client->Recv(buf, 1024, &timestamp);
+    client->recv(buf, 1024, &timestamp);
     logv("[Server]---ts: %lld str: %s\n", timestamp, buf);
-    client->Send("Got it\n", 7);
+    client->send("Got it\n", 7);
     os_msleep(1000);
   }
 }

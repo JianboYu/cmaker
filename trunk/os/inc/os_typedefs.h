@@ -45,6 +45,9 @@
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 
+#define STR(x)  #x
+#define XSTR(x) STR(x)
+
 #if defined(_OS_ANDROID)
 // for sdk >= 21 support monitic clock for android
 // FIXME:TODO (jianbo)
@@ -76,6 +79,5 @@ typedef int SOCKET;
   #define AF_INET 2
   #endif
 #endif
-
 
 #endif //_OS_TYPEDEFS_H_

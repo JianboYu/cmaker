@@ -56,23 +56,23 @@ int32_t main(int32_t argc, char *argv[]) {
   log_verbose("tag", "created thread tid: %d\n", tid);
 
   IPAddress ip_addr(123456);
-  log_verbose("tag", "ip: %s\n", ip_addr.ToString().c_str());
+  log_verbose("tag", "ip: %s\n", ip_addr.to_string().c_str());
 
   SocketAddress socket_addr_v(ip_addr, 50);
-  socket_addr_v.SetIP("127.0.0.1");
-  socket_addr_v.SetPort(8008);
-  log_verbose("tag", "socket addr: %s \n", socket_addr_v.ToString().c_str());
+  socket_addr_v.set_ip("127.0.0.1");
+  socket_addr_v.set_port(8008);
+  log_verbose("tag", "socket addr: %s \n", socket_addr_v.to_string().c_str());
 
   scoped_ptr<ISocket> isocket(ISocket::Create(AF_INET, SOCK_STREAM/*SOCK_DGRAM*/, IPPROTO_TCP));
-  SocketAddress socket_addr2 = isocket->GetLocalAddress();
-  log_verbose("tag", "socket addr: %s \n", socket_addr2.ToString().c_str());
+  SocketAddress socket_addr2 = isocket->local_address();
+  log_verbose("tag", "socket addr: %s \n", socket_addr2.to_string().c_str());
 
-  CHECK_EQ(0, isocket->Bind(socket_addr_v));
-  CHECK_EQ(0, isocket->Listen(5));
+  CHECK_EQ(0, isocket->bind(socket_addr_v));
+  CHECK_EQ(0, isocket->listen(5));
   SocketAddress client_socket_addr;
-  ISocket *client = isocket->Accept(&client_socket_addr);
+  ISocket *client = isocket->accept(&client_socket_addr);
   CHECK(client);
-  log_verbose("tag", "client socket addr: %s \n", client_socket_addr.ToString().c_str());
+  log_verbose("tag", "client socket addr: %s \n", client_socket_addr.to_string().c_str());
 
   socket_addr socket_addr_src;
   socket_addr_src._sockaddr_in.sin_family = AF_INET;

@@ -27,7 +27,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#undef SetPort
+#undef set_port
 #endif
 
 #include <algorithm>
@@ -40,9 +40,9 @@ typedef void* SockOptArg;
 #endif  // _OS_POSIX
 
 #if defined(_OS_POSIX) && !defined(_OS_MAC) && !defined(__native_client__)
-int64_t GetSocketRecvTimestamp(int socket) {
+int64_t GetSocketRecvTimestamp(int32_t socket) {
   struct timeval tv_ioctl;
-  int ret = ioctl(socket, SIOCGSTAMP, &tv_ioctl);
+  int32_t ret = ioctl(socket, SIOCGSTAMP, &tv_ioctl);
   if (ret != 0)
     return -1;
   int64_t timestamp =
@@ -51,7 +51,7 @@ int64_t GetSocketRecvTimestamp(int socket) {
   return timestamp;
 }
 #else
-int64_t GetSocketRecvTimestamp(int socket) {
+int64_t GetSocketRecvTimestamp(int32_t socket) {
   return -1;
 }
 #endif
@@ -59,6 +59,32 @@ int64_t GetSocketRecvTimestamp(int socket) {
 #if defined(_OS_WINDOWS)
 typedef char* SockOptArg;
 #endif
+
+inline bool IsBlockingError(int32_t e) {
+  return (e == EWOULDBLOCK) || (e == EAGAIN) || (e == EINPROGRESS);
+}
+
+inline uint32_t hton32(uint32_t n) {
+  uint32_t result = 0;
+  result = htonl(n);
+  return result;
+}
+inline uint16_t hton16(uint16_t n) {
+  uint16_t result = 0;
+  result = htons(n);
+  return result;
+}
+inline uint32_t ntoh32(uint32_t n) {
+  uint32_t result = 0;
+  result = ntohl(n);
+  return result;
+}
+
+inline uint16_t ntoh16(uint16_t n) {
+  uint16_t result = 0;
+  result = ntohs(n);
+  return result;
+}
 
 namespace os {
 #if defined(_OS_WINDOWS)
@@ -85,10 +111,10 @@ const uint16_t PACKET_MAXIMUMS[] = {
     0,      // End of list marker
 };
 
-static const int IP_HEADER_SIZE = 20u;
-static const int IPV6_HEADER_SIZE = 40u;
-static const int ICMP_HEADER_SIZE = 8u;
-static const int ICMP_PING_TIMEOUT_MILLIS = 10000u;
+static const int32_t IP_HEADER_SIZE = 20u;
+static const int32_t IPV6_HEADER_SIZE = 40u;
+static const int32_t ICMP_HEADER_SIZE = 8u;
+static const int32_t ICMP_PING_TIMEOUT_MILLIS = 10000u;
 #endif
 
 bool SocketAddressFromSockAddrStorage(const sockaddr_storage& addr,
@@ -100,20 +126,20 @@ bool SocketAddressFromSockAddrStorage(const sockaddr_storage& addr,
   if (addr.ss_family == AF_INET) {
     const sockaddr_in* saddr = reinterpret_cast<const sockaddr_in*>(&addr);
     *out = SocketAddress(IPAddress(saddr->sin_addr),
-                         NetworkToHost16(saddr->sin_port));
+                         ntoh16(saddr->sin_port));
     return true;
   } else if (addr.ss_family == AF_INET6) {
     const sockaddr_in6* saddr = reinterpret_cast<const sockaddr_in6*>(&addr);
     logv("ip: %d port: %d\n", saddr->sin6_addr, saddr->sin6_port);
     *out = SocketAddress(IPAddress(saddr->sin6_addr),
-                         NetworkToHost16(saddr->sin6_port));
-    out->SetScopeID(saddr->sin6_scope_id);
+                         ntoh16(saddr->sin6_port));
+    out->set_scope_id(saddr->sin6_scope_id);
     return true;
   }
   return false;
 }
 
-SocketAddress EmptySocketAddressWithFamily(int family) {
+SocketAddress EmptySocketAddressWithFamily(int32_t family) {
   if (family == AF_INET) {
     return SocketAddress(IPAddress(INADDR_ANY), 0);
   } else if (family == AF_INET6) {
@@ -122,7 +148,7 @@ SocketAddress EmptySocketAddressWithFamily(int family) {
   return SocketAddress();
 }
 
-ISocket *ISocket::Create(int family, int type, int protocol) {
+ISocket *ISocket::Create(int32_t family, int32_t type, int32_t protocol) {
   SocketImpl *ps = new SocketImpl();
   CHECK_EQ(true, ps->Create(family, type, protocol));
   return ps;
@@ -142,7 +168,7 @@ SocketImpl::SocketImpl(SOCKET s)
   if (s_ != INVALID_SOCKET) {
     enabled_events_ = DE_READ | DE_WRITE;
 
-    int type = SOCK_STREAM;
+    int32_t type = SOCK_STREAM;
     socklen_t len = sizeof(type);
     CHECK(0 == getsockopt(s_, SOL_SOCKET, SO_TYPE, (SockOptArg)&type, &len));
     udp_ = (SOCK_DGRAM == type);
@@ -156,11 +182,11 @@ SocketImpl::~SocketImpl() {
     delete crit_;
     crit_ = NULL;
   }
-  Close();
+  close();
 }
 
-bool SocketImpl::Create(int family, int type, int protocol) {
-  Close();
+bool SocketImpl::Create(int32_t family, int32_t type, int32_t protocol) {
+  close();
   s_ = ::socket(family, type, protocol);
   udp_ = (SOCK_DGRAM == type);
   UpdateLastError();
@@ -169,73 +195,73 @@ bool SocketImpl::Create(int family, int type, int protocol) {
   return s_ != INVALID_SOCKET;
 }
 
-SocketAddress SocketImpl::GetLocalAddress() const {
+SocketAddress SocketImpl::local_address() const {
   sockaddr_storage addr_storage = {0};
   socklen_t addrlen = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
-  int result = ::getsockname(s_, addr, &addrlen);
+  int32_t result = ::getsockname(s_, addr, &addrlen);
   SocketAddress address;
   if (result >= 0) {
     SocketAddressFromSockAddrStorage(addr_storage, &address);
   } else {
-    logv("GetLocalAddress: unable to get local addr, socket=\n");
+    logv("local_address: unable to get local addr, socket=\n");
   }
   return address;
 }
 
-SocketAddress SocketImpl::GetRemoteAddress() const {
+SocketAddress SocketImpl::remote_address() const {
   sockaddr_storage addr_storage = {0};
   socklen_t addrlen = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
-  int result = ::getpeername(s_, addr, &addrlen);
+  int32_t result = ::getpeername(s_, addr, &addrlen);
   SocketAddress address;
   if (result >= 0) {
     SocketAddressFromSockAddrStorage(addr_storage, &address);
   } else {
-    logv("GetRemoteAddress: unable to get remote addr, socket=\n");
+    logv("remote_address: unable to get remote addr, socket=\n");
   }
   return address;
 }
 
-int SocketImpl::Bind(const SocketAddress& bind_addr) {
+int32_t SocketImpl::bind(const SocketAddress& bind_addr) {
   sockaddr_storage addr_storage;
-  size_t len = bind_addr.ToSockAddrStorage(&addr_storage);
+  int32_t len = bind_addr.to_sock_addr_storage(&addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
 
-  int err = ::bind(s_, addr, static_cast<int>(len));
+  int32_t err = ::bind(s_, addr, static_cast<int32_t>(len));
   UpdateLastError();
 #if !defined(NDEBUG)
   if (0 == err) {
     dbg_addr_ = "Bound @ ";
-    dbg_addr_.append(GetLocalAddress().ToString());
+    dbg_addr_.append(local_address().to_string());
   }
 #endif
   return err;
 }
 
-int SocketImpl::Connect(const SocketAddress& addr) {
+int32_t SocketImpl::connect(const SocketAddress& addr) {
   // TODO(pthatcher): Implicit creation is required to reconnect...
   // ...but should we make it more explicit?
   if (state_ != CS_CLOSED) {
-    SetError(EALREADY);
+    set_error(EALREADY);
     return SOCKET_ERROR;
   }
   return DoConnect(addr);
 }
 
-int SocketImpl::DoConnect(const SocketAddress& connect_addr) {
+int32_t SocketImpl::DoConnect(const SocketAddress& connect_addr) {
   if ((s_ == INVALID_SOCKET) &&
       !Create(connect_addr.family(), SOCK_STREAM, IPPROTO_TCP)) {
     return SOCKET_ERROR;
   }
   sockaddr_storage addr_storage;
-  size_t len = connect_addr.ToSockAddrStorage(&addr_storage);
+  int32_t len = connect_addr.to_sock_addr_storage(&addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
-  int err = ::connect(s_, addr, static_cast<int>(len));
+  int32_t err = ::connect(s_, addr, static_cast<int32_t>(len));
   UpdateLastError();
   if (err == 0) {
     state_ = CS_CONNECTED;
-  } else if (IsBlockingError(GetError())) {
+  } else if (IsBlockingError(error())) {
     state_ = CS_CONNECTING;
     enabled_events_ |= DE_CONNECT;
   } else {
@@ -246,27 +272,32 @@ int SocketImpl::DoConnect(const SocketAddress& connect_addr) {
   return 0;
 }
 
-int SocketImpl::GetError() const {
+int32_t SocketImpl::error() const {
   AutoLock cs(crit_);
   return error_;
 }
 
-void SocketImpl::SetError(int error) {
+void SocketImpl::set_error(int32_t error) {
   AutoLock cs(crit_);
   error_ = error;
 }
 
-ISocket::ConnState SocketImpl::GetState() const {
+bool SocketImpl::is_blocking() const {
+  AutoLock cs(crit_);
+  return IsBlockingError(error());
+}
+
+ISocket::ConnState SocketImpl::state() const {
   return state_;
 }
 
-int SocketImpl::GetOption(Option opt, int* value) {
-  int slevel;
-  int sopt;
+int32_t SocketImpl::get_option(Option opt, int32_t* value) {
+  int32_t slevel;
+  int32_t sopt;
   if (TranslateOption(opt, &slevel, &sopt) == -1)
     return -1;
   socklen_t optlen = sizeof(*value);
-  int ret = ::getsockopt(s_, slevel, sopt, (SockOptArg)value, &optlen);
+  int32_t ret = ::getsockopt(s_, slevel, sopt, (SockOptArg)value, &optlen);
   if (ret != -1 && opt == OPT_DONTFRAGMENT) {
 #if defined(_OS_LINUX) && !defined(_OS_ANDROID)
     *value = (*value != IP_PMTUDISC_DONT) ? 1 : 0;
@@ -275,9 +306,9 @@ int SocketImpl::GetOption(Option opt, int* value) {
   return ret;
 }
 
-int SocketImpl::SetOption(Option opt, int value) {
-  int slevel;
-  int sopt;
+int32_t SocketImpl::set_option(Option opt, int32_t value) {
+  int32_t slevel;
+  int32_t sopt;
   if (TranslateOption(opt, &slevel, &sopt) == -1)
     return -1;
   if (opt == OPT_DONTFRAGMENT) {
@@ -288,9 +319,9 @@ int SocketImpl::SetOption(Option opt, int value) {
   return ::setsockopt(s_, slevel, sopt, (SockOptArg)&value, sizeof(value));
 }
 
-int SocketImpl::Send(const void* pv, size_t cb) {
-  int sent = DoSend(s_, reinterpret_cast<const char *>(pv),
-      static_cast<int>(cb),
+int32_t SocketImpl::send(const void* pv, int32_t cb) {
+  int32_t sent = DoSend(s_, reinterpret_cast<const char *>(pv),
+      static_cast<int32_t>(cb),
 #if defined(_OS_LINUX) && !defined(_OS_ANDROID)
       // Suppress SIGPIPE. Without this, attempting to send on a socket whose
       // other end is closed will result in a SIGPIPE signal being raised to
@@ -305,42 +336,42 @@ int SocketImpl::Send(const void* pv, size_t cb) {
   UpdateLastError();
   MaybeRemapSendError();
   // We have seen minidumps where this may be false.
-  CHECK(sent <= static_cast<int>(cb));
-  if ((sent > 0 && sent < static_cast<int>(cb)) ||
-      (sent < 0 && IsBlockingError(GetError()))) {
+  CHECK(sent <= static_cast<int32_t>(cb));
+  if ((sent > 0 && sent < static_cast<int32_t>(cb)) ||
+      (sent < 0 && IsBlockingError(error()))) {
     enabled_events_ |= DE_WRITE;
   }
   return sent;
 }
 
-int SocketImpl::SendTo(const void* buffer,
-                           size_t length,
+int32_t SocketImpl::send_to(const void* buffer,
+                           int32_t length,
                            const SocketAddress& addr) {
   sockaddr_storage saddr;
-  size_t len = addr.ToSockAddrStorage(&saddr);
-  int sent = DoSendTo(
-      s_, static_cast<const char *>(buffer), static_cast<int>(length),
+  int32_t len = addr.to_sock_addr_storage(&saddr);
+  int32_t sent = DoSendTo(
+      s_, static_cast<const char *>(buffer), static_cast<int32_t>(length),
 #if defined(_OS_LINUX) && !defined(_OS_ANDROID)
       // Suppress SIGPIPE. See above for explanation.
       MSG_NOSIGNAL,
 #else
       0,
 #endif
-      reinterpret_cast<sockaddr*>(&saddr), static_cast<int>(len));
+      reinterpret_cast<sockaddr*>(&saddr), static_cast<int32_t>(len));
   UpdateLastError();
   MaybeRemapSendError();
   // We have seen minidumps where this may be false.
-  CHECK(sent <= static_cast<int>(length));
-  if ((sent > 0 && sent < static_cast<int>(length)) ||
-      (sent < 0 && IsBlockingError(GetError()))) {
+  CHECK(sent <= static_cast<int32_t>(length));
+  if ((sent > 0 && sent < static_cast<int32_t>(length)) ||
+      (sent < 0 && IsBlockingError(error()))) {
     enabled_events_ |= DE_WRITE;
   }
   return sent;
 }
 
-int SocketImpl::Recv(void* buffer, size_t length, int64_t* timestamp) {
-  int received = ::recv(s_, static_cast<char*>(buffer),
-                        static_cast<int>(length), 0);
+int32_t SocketImpl::recv(void* buffer, int32_t length, int64_t* timestamp) {
+  int32_t received = ::recv(s_, static_cast<char*>(buffer),
+                        static_cast<int32_t>(length), 0);
   if ((received == 0) && (length != 0)) {
     // Note: on graceful shutdown, recv can return 0.  In this case, we
     // pretend it is blocking, and then signal close, so that simplifying
@@ -349,66 +380,66 @@ int SocketImpl::Recv(void* buffer, size_t length, int64_t* timestamp) {
     // Must turn this back on so that the select() loop will notice the close
     // event.
     enabled_events_ |= DE_READ;
-    SetError(EWOULDBLOCK);
+    set_error(EWOULDBLOCK);
     return SOCKET_ERROR;
   }
   if (timestamp) {
     *timestamp = GetSocketRecvTimestamp(s_);
   }
   UpdateLastError();
-  int error = GetError();
-  bool success = (received >= 0) || IsBlockingError(error);
+  int32_t err = error();
+  bool success = (received >= 0) || IsBlockingError(err);
   if (udp_ || success) {
     enabled_events_ |= DE_READ;
   }
   if (!success) {
-    loge("Error = %d\n", error);
+    loge("Error = %d\n", err);
   }
   return received;
 }
 
-int SocketImpl::RecvFrom(void* buffer,
-                             size_t length,
+int32_t SocketImpl::recv_from(void* buffer,
+                             int32_t length,
                              SocketAddress* out_addr,
                              int64_t* timestamp) {
   sockaddr_storage addr_storage;
   socklen_t addr_len = sizeof(addr_storage);
   sockaddr* addr = reinterpret_cast<sockaddr*>(&addr_storage);
-  int received = ::recvfrom(s_, static_cast<char*>(buffer),
-                            static_cast<int>(length), 0, addr, &addr_len);
+  int32_t received = ::recvfrom(s_, static_cast<char*>(buffer),
+                            static_cast<int32_t>(length), 0, addr, &addr_len);
   if (timestamp) {
     *timestamp = GetSocketRecvTimestamp(s_);
   }
   UpdateLastError();
   if ((received >= 0) && (out_addr != nullptr))
     SocketAddressFromSockAddrStorage(addr_storage, out_addr);
-  int error = GetError();
-  bool success = (received >= 0) || IsBlockingError(error);
+  int32_t err = error();
+  bool success = (received >= 0) || IsBlockingError(err);
   if (udp_ || success) {
     enabled_events_ |= DE_READ;
   }
   if (!success) {
-    loge("Error = %d", error);
+    loge("Error = %d", err);
   }
   return received;
 }
 
-int SocketImpl::Listen(int backlog) {
-  int err = ::listen(s_, backlog);
+int32_t SocketImpl::listen(int32_t backlog) {
+  int32_t err = ::listen(s_, backlog);
   UpdateLastError();
   if (err == 0) {
     state_ = CS_CONNECTING;
     enabled_events_ |= DE_ACCEPT;
 #if !defined(NDEBUG)
     dbg_addr_ = "Listening @ ";
-    dbg_addr_.append(GetLocalAddress().ToString());
+    dbg_addr_.append(local_address().to_string());
 #endif
   }
 
   return err;
 }
 
-ISocket* SocketImpl::Accept(SocketAddress* out_addr) {
+ISocket* SocketImpl::accept(SocketAddress* out_addr) {
   // Always re-subscribe DE_ACCEPT to make sure new incoming connections will
   // trigger an event even if DoAccept returns an error here.
   enabled_events_ |= DE_ACCEPT;
@@ -423,10 +454,10 @@ ISocket* SocketImpl::Accept(SocketAddress* out_addr) {
   return new SocketImpl(s);
 }
 
-int SocketImpl::Close() {
+int32_t SocketImpl::close() {
   if (s_ == INVALID_SOCKET)
     return 0;
-  int err = ::closesocket(s_);
+  int32_t err = ::closesocket(s_);
   UpdateLastError();
   s_ = INVALID_SOCKET;
   state_ = CS_CLOSED;
@@ -434,10 +465,10 @@ int SocketImpl::Close() {
   return err;
 }
 
-int SocketImpl::EstimateMTU(uint16_t* mtu) {
-  SocketAddress addr = GetRemoteAddress();
-  if (addr.IsAnyIP()) {
-    SetError(ENOTCONN);
+int32_t SocketImpl::estimate_mtu(uint16_t* mtu) {
+  SocketAddress addr = remote_address();
+  if (addr.is_any_ip()) {
+    set_error(ENOTCONN);
     return -1;
   }
 
@@ -445,23 +476,23 @@ int SocketImpl::EstimateMTU(uint16_t* mtu) {
   // Gets the interface MTU (TTL=1) for the interface used to reach |addr|.
   WinPing ping;
   if (!ping.IsValid()) {
-    SetError(EINVAL);  // can't think of a better error ID
+    set_error(EINVAL);  // can't think of a better error ID
     return -1;
   }
-  int header_size = ICMP_HEADER_SIZE;
+  int32_t header_size = ICMP_HEADER_SIZE;
   if (addr.family() == AF_INET6) {
     header_size += IPV6_HEADER_SIZE;
   } else if (addr.family() == AF_INET) {
     header_size += IP_HEADER_SIZE;
   }
 
-  for (int level = 0; PACKET_MAXIMUMS[level + 1] > 0; ++level) {
+  for (int32_t level = 0; PACKET_MAXIMUMS[level + 1] > 0; ++level) {
     int32_t size = PACKET_MAXIMUMS[level] - header_size;
-    WinPing::PingResult result = ping.Ping(addr.ipaddr(), size,
+    WinPing::PingResult result = ping.Ping(addr.ip_addr(), size,
                                            ICMP_PING_TIMEOUT_MILLIS,
                                            1, false);
     if (result == WinPing::PING_FAIL) {
-      SetError(EINVAL);  // can't think of a better error ID
+      set_error(EINVAL);  // can't think of a better error ID
       return -1;
     } else if (result != WinPing::PING_TOO_LARGE) {
       *mtu = PACKET_MAXIMUMS[level];
@@ -476,13 +507,13 @@ int SocketImpl::EstimateMTU(uint16_t* mtu) {
   // SIOCGIFMTU would work if we knew which interface would be used, but
   // figuring that out is pretty complicated. For now we'll return an error
   // and let the caller pick a default MTU.
-  SetError(EINVAL);
+  set_error(EINVAL);
   return -1;
 #elif defined(_OS_LINUX)
   // Gets the path MTU.
-  int value;
+  int32_t value;
   socklen_t vlen = sizeof(value);
-  int err = getsockopt(s_, IPPROTO_IP, IP_MTU, &value, &vlen);
+  int32_t err = getsockopt(s_, IPPROTO_IP, IP_MTU, &value, &vlen);
   if (err < 0) {
     UpdateLastError();
     return err;
@@ -505,14 +536,14 @@ SOCKET SocketImpl::DoAccept(SOCKET socket,
   return ::accept(socket, addr, addrlen);
 }
 
-int SocketImpl::DoSend(SOCKET socket, const char* buf, int len, int flags) {
+int32_t SocketImpl::DoSend(SOCKET socket, const char* buf, int32_t len, int32_t flags) {
   return ::send(socket, buf, len, flags);
 }
 
-int SocketImpl::DoSendTo(SOCKET socket,
+int32_t SocketImpl::DoSendTo(SOCKET socket,
                              const char* buf,
-                             int len,
-                             int flags,
+                             int32_t len,
+                             int32_t flags,
                              const struct sockaddr* dest_addr,
                              socklen_t addrlen) {
   return ::sendto(socket, buf, len, flags, dest_addr, addrlen);
@@ -520,7 +551,7 @@ int SocketImpl::DoSendTo(SOCKET socket,
 
 void SocketImpl::UpdateLastError() {
 #ifdef _OS_POSIX
-  SetError(errno);
+  set_error(errno);
 #endif
 }
 
@@ -531,13 +562,13 @@ void SocketImpl::MaybeRemapSendError() {
   // ENOBUFS - The output queue for a network interface is full.
   // This generally indicates that the interface has stopped sending,
   // but may be caused by transient congestion.
-  if (GetError() == ENOBUFS) {
-    SetError(EWOULDBLOCK);
+  if (error() == ENOBUFS) {
+    set_error(EWOULDBLOCK);
   }
 #endif
 }
 
-int SocketImpl::TranslateOption(Option opt, int* slevel, int* sopt) {
+int32_t SocketImpl::TranslateOption(Option opt, int32_t* slevel, int32_t* sopt) {
   switch (opt) {
     case OPT_DONTFRAGMENT:
 #if defined(_OS_WINDOWS)
@@ -577,9 +608,39 @@ int SocketImpl::TranslateOption(Option opt, int* slevel, int* sopt) {
 }
 
 // IPAddress Cls
-uint32_t IPAddress::v4AddressAsHostOrderInteger() const {
-  if (family_ == AF_INET) {
-    return NetworkToHost32(u_.ip4.s_addr);
+IPAddress::IPAddress() : _family(AF_UNSPEC) {
+    ::memset(&_u, 0, sizeof(_u));
+  }
+
+IPAddress::IPAddress(const in_addr& ip4) : _family(AF_INET) {
+    memset(&_u, 0, sizeof(_u));
+    _u.ip4 = ip4;
+  }
+
+IPAddress::IPAddress(const in6_addr& ip6) : _family(AF_INET6) {
+    _u.ip6 = ip6;
+  }
+
+IPAddress::IPAddress(uint32_t ip_in_host_byte_order) : _family(AF_INET) {
+    memset(&_u, 0, sizeof(_u));
+    _u.ip4.s_addr = hton32(ip_in_host_byte_order);
+  }
+
+IPAddress::IPAddress(const IPAddress& other) : _family(other._family) {
+    ::memcpy(&_u, &other._u, sizeof(_u));
+  }
+
+
+const IPAddress & IPAddress::operator=(const IPAddress& other) {
+    _family = other._family;
+    ::memcpy(&_u, &other._u, sizeof(_u));
+    return *this;
+  }
+
+
+uint32_t IPAddress::ipv4_address_host() const {
+  if (_family == AF_INET) {
+    return ntoh32(_u.ip4.s_addr);
   } else {
     return 0;
   }
@@ -589,12 +650,12 @@ bool IPIsUnspec(const IPAddress& ip) {
   return ip.family() == AF_UNSPEC;
 }
 
-bool IPAddress::IsNil() const {
+bool IPAddress::is_invalid() const {
   return IPIsUnspec(*this);
 }
 
-size_t IPAddress::Size() const {
-  switch (family_) {
+int32_t IPAddress::addr_size() const {
+  switch (_family) {
     case AF_INET:
       return sizeof(in_addr);
     case AF_INET6:
@@ -605,16 +666,16 @@ size_t IPAddress::Size() const {
 
 
 bool IPAddress::operator==(const IPAddress &other) const {
-  if (family_ != other.family_) {
+  if (_family != other._family) {
     return false;
   }
-  if (family_ == AF_INET) {
-    return memcmp(&u_.ip4, &other.u_.ip4, sizeof(u_.ip4)) == 0;
+  if (_family == AF_INET) {
+    return memcmp(&_u.ip4, &other._u.ip4, sizeof(_u.ip4)) == 0;
   }
-  if (family_ == AF_INET6) {
-    return memcmp(&u_.ip6, &other.u_.ip6, sizeof(u_.ip6)) == 0;
+  if (_family == AF_INET6) {
+    return memcmp(&_u.ip6, &other._u.ip6, sizeof(_u.ip6)) == 0;
   }
-  return family_ == AF_UNSPEC;
+  return _family == AF_UNSPEC;
 }
 
 bool IPAddress::operator!=(const IPAddress &other) const {
@@ -627,23 +688,23 @@ bool IPAddress::operator >(const IPAddress &other) const {
 
 bool IPAddress::operator <(const IPAddress &other) const {
   // IPv4 is 'less than' IPv6
-  if (family_ != other.family_) {
-    if (family_ == AF_UNSPEC) {
+  if (_family != other._family) {
+    if (_family == AF_UNSPEC) {
       return true;
     }
-    if (family_ == AF_INET && other.family_ == AF_INET6) {
+    if (_family == AF_INET && other._family == AF_INET6) {
       return true;
     }
     return false;
   }
   // Comparing addresses of the same family.
-  switch (family_) {
+  switch (_family) {
     case AF_INET: {
-      return NetworkToHost32(u_.ip4.s_addr) <
-          NetworkToHost32(other.u_.ip4.s_addr);
+      return ntoh32(_u.ip4.s_addr) <
+          ntoh32(other._u.ip4.s_addr);
     }
     case AF_INET6: {
-      return memcmp(&u_.ip6.s6_addr, &other.u_.ip6.s6_addr, 16) < 0;
+      return memcmp(&_u.ip6.s6_addr, &other._u.ip6.s6_addr, 16) < 0;
     }
   }
   // Catches AF_UNSPEC and invalid addresses.
@@ -651,19 +712,21 @@ bool IPAddress::operator <(const IPAddress &other) const {
 }
 
 std::ostream& operator<<(std::ostream& os, const IPAddress& ip) {
-  os << ip.ToString();
+  os << ip.to_string();
   return os;
 }
 
 in6_addr IPAddress::ipv6_address() const {
-  return u_.ip6;
+  return _u.ip6;
 }
 
 in_addr IPAddress::ipv4_address() const {
-  return u_.ip4;
+  return _u.ip4;
 }
 
-const char* inet_ntop(int af, const void *src, char* dst, socklen_t size) {
+int32_t IPAddress::family() const { return _family; }
+
+const char* inet_ntop(int32_t af, const void *src, char* dst, socklen_t size) {
 #if defined(_OS_WINDOWS)
   return win32_inet_ntop(af, src, dst, size);
 #else
@@ -671,37 +734,37 @@ const char* inet_ntop(int af, const void *src, char* dst, socklen_t size) {
 #endif
 }
 
-int inet_pton(int af, const char* src, void *dst) {
+int32_t inet_pton(int32_t af, const char* src, void *dst) {
 #if defined(_OS_WINDOWS)
   return win32_inet_pton(af, src, dst);
 #else
   return ::inet_pton(af, src, dst);
 #endif
 }
-std::string IPAddress::ToString() const {
-  if (family_ != AF_INET && family_ != AF_INET6) {
+std::string IPAddress::to_string() const {
+  if (_family != AF_INET && _family != AF_INET6) {
     return std::string();
   }
   char buf[INET6_ADDRSTRLEN] = {0};
-  const void* src = &u_.ip4;
-  if (family_ == AF_INET6) {
-    src = &u_.ip6;
+  const void* src = &_u.ip4;
+  if (_family == AF_INET6) {
+    src = &_u.ip6;
   }
-  if (!inet_ntop(family_, src, buf, sizeof(buf))) {
+  if (!inet_ntop(_family, src, buf, sizeof(buf))) {
     return std::string();
   }
   return std::string(buf);
 }
 
-std::string IPAddress::ToSensitiveString() const {
+std::string IPAddress::to_sensitive_string() const {
 #if !defined(NDEBUG)
   // Return non-stripped in debug.
-  return ToString();
+  return to_string();
 #else
-  switch (family_) {
+  switch (_family) {
     case AF_INET: {
-      std::string address = ToString();
-      size_t find_pos = address.rfind('.');
+      std::string address = to_string();
+      int32_t find_pos = address.rfind('.');
       if (find_pos == std::string::npos)
         return std::string();
       address.resize(find_pos);
@@ -712,7 +775,7 @@ std::string IPAddress::ToSensitiveString() const {
       std::string result;
       result.resize(INET6_ADDRSTRLEN);
       in6_addr addr = ipv6_address();
-      size_t len =
+      int32_t len =
           rtc::sprintfn(&(result[0]), result.size(), "%x:%x:%x:x:x:x:x:x",
                         (addr.s6_addr[0] << 8) + addr.s6_addr[1],
                         (addr.s6_addr[2] << 8) + addr.s6_addr[3],
@@ -731,7 +794,7 @@ in_addr ExtractMappedAddress(const in6_addr& in6) {
   return ipv4;
 }
 
-bool IPIsHelper(const IPAddress& ip, const in6_addr& tomatch, int length) {
+bool IPIsHelper(const IPAddress& ip, const in6_addr& tomatch, int32_t length) {
   // Helper method for checking IP prefix matches (but only on whole byte
   // lengths). Length is in bits.
   in6_addr addr = ip.ipv6_address();
@@ -745,23 +808,23 @@ bool IPIsV4Mapped(const IPAddress& ip) {
   return IPIsHelper(ip, kV4MappedPrefix, 96);
 }
 
-IPAddress IPAddress::Normalized() const {
-  if (family_ != AF_INET6) {
+IPAddress IPAddress::normalized() const {
+  if (_family != AF_INET6) {
     return *this;
   }
   if (!IPIsV4Mapped(*this)) {
     return *this;
   }
-  in_addr addr = ExtractMappedAddress(u_.ip6);
+  in_addr addr = ExtractMappedAddress(_u.ip6);
   return IPAddress(addr);
 }
 
-IPAddress IPAddress::AsIPv6Address() const {
-  if (family_ != AF_INET) {
+IPAddress IPAddress::as_ipv6_address() const {
+  if (_family != AF_INET) {
     return *this;
   }
   in6_addr v6addr = kV4MappedPrefix;
-  ::memcpy(&v6addr.s6_addr[12], &u_.ip4.s_addr, sizeof(u_.ip4.s_addr));
+  ::memcpy(&v6addr.s6_addr[12], &_u.ip4.s_addr, sizeof(_u.ip4.s_addr));
   return IPAddress(v6addr);
 }
 
@@ -770,19 +833,19 @@ SocketAddress::SocketAddress() {
   Clear();
 }
 
-SocketAddress::SocketAddress(const std::string& hostname, int port) {
-  SetIP(hostname);
-  SetPort(port);
+SocketAddress::SocketAddress(const std::string& hostname, int32_t port) {
+  set_ip(hostname);
+  set_port(port);
 }
 
 SocketAddress::SocketAddress(uint32_t ip_as_host_order_integer, int port) {
-  SetIP(IPAddress(ip_as_host_order_integer));
-  SetPort(port);
+  set_ip(IPAddress(ip_as_host_order_integer));
+  set_port(port);
 }
 
-SocketAddress::SocketAddress(const IPAddress& ip, int port) {
-  SetIP(ip);
-  SetPort(port);
+SocketAddress::SocketAddress(const IPAddress& ip, int32_t port) {
+  set_ip(ip);
+  set_port(port);
 }
 
 SocketAddress::SocketAddress(const SocketAddress& addr) {
@@ -790,15 +853,15 @@ SocketAddress::SocketAddress(const SocketAddress& addr) {
 }
 
 void SocketAddress::Clear() {
-  hostname_.clear();
-  literal_ = false;
-  ip_ = IPAddress();
-  port_ = 0;
-  scope_id_ = 0;
+  _hostname.clear();
+  _literal = false;
+  _ip = IPAddress();
+  _port = 0;
+  _scope_id = 0;
 }
 
 bool SocketAddress::IsNil() const {
-  return hostname_.empty() && IPIsUnspec(ip_) && 0 == port_;
+  return _hostname.empty() && IPIsUnspec(_ip) && 0 == _port;
 }
 
 bool IPIsAny(const IPAddress& ip) {
@@ -815,30 +878,30 @@ bool IPIsAny(const IPAddress& ip) {
 
 
 bool SocketAddress::IsComplete() const {
-  return (!IPIsAny(ip_)) && (0 != port_);
+  return (!IPIsAny(_ip)) && (0 != _port);
 }
 
 SocketAddress& SocketAddress::operator=(const SocketAddress& addr) {
-  hostname_ = addr.hostname_;
-  ip_ = addr.ip_;
-  port_ = addr.port_;
-  literal_ = addr.literal_;
-  scope_id_ = addr.scope_id_;
+  _hostname = addr._hostname;
+  _ip = addr._ip;
+  _port = addr._port;
+  _literal = addr._literal;
+  _scope_id = addr._scope_id;
   return *this;
 }
 
-void SocketAddress::SetIP(uint32_t ip_as_host_order_integer) {
-  hostname_.clear();
-  literal_ = false;
-  ip_ = IPAddress(ip_as_host_order_integer);
-  scope_id_ = 0;
+void SocketAddress::set_ip(uint32_t ip_as_host_order_integer) {
+  _hostname.clear();
+  _literal = false;
+  _ip = IPAddress(ip_as_host_order_integer);
+  _scope_id = 0;
 }
 
-void SocketAddress::SetIP(const IPAddress& ip) {
-  hostname_.clear();
-  literal_ = false;
-  ip_ = ip;
-  scope_id_ = 0;
+void SocketAddress::set_ip(const IPAddress& ip) {
+  _hostname.clear();
+  _literal = false;
+  _ip = ip;
+  _scope_id = 0;
 }
 
 bool IPFromString(const std::string& str, IPAddress* out) {
@@ -859,92 +922,92 @@ bool IPFromString(const std::string& str, IPAddress* out) {
   return true;
 }
 
-void SocketAddress::SetIP(const std::string& hostname) {
-  hostname_ = hostname;
-  literal_ = IPFromString(hostname, &ip_);
-  if (!literal_) {
-    ip_ = IPAddress();
+void SocketAddress::set_ip(const std::string& hostname) {
+  _hostname = hostname;
+  _literal = IPFromString(hostname, &_ip);
+  if (!_literal) {
+    _ip = IPAddress();
   }
-  scope_id_ = 0;
+  _scope_id = 0;
 }
 
-void SocketAddress::SetResolvedIP(uint32_t ip_as_host_order_integer) {
-  ip_ = IPAddress(ip_as_host_order_integer);
-  scope_id_ = 0;
+void SocketAddress::set_resolved_ip(uint32_t ip_as_host_order_integer) {
+  _ip = IPAddress(ip_as_host_order_integer);
+  _scope_id = 0;
 }
 
-void SocketAddress::SetResolvedIP(const IPAddress& ip) {
-  ip_ = ip;
-  scope_id_ = 0;
+void SocketAddress::set_resolved_ip(const IPAddress& ip) {
+  _ip = ip;
+  _scope_id = 0;
 }
 
-void SocketAddress::SetPort(int port) {
+void SocketAddress::set_port(int32_t port) {
   CHECK((0 <= port) && (port < 65536));
-  port_ = static_cast<uint16_t>(port);
+  _port = static_cast<uint16_t>(port);
 }
 
 uint32_t SocketAddress::ip() const {
-  return ip_.v4AddressAsHostOrderInteger();
+  return _ip.ipv4_address_host();
 }
 
-const IPAddress& SocketAddress::ipaddr() const {
-  return ip_;
+const IPAddress& SocketAddress::ip_addr() const {
+  return _ip;
 }
 
 uint16_t SocketAddress::port() const {
-  return port_;
+  return _port;
 }
 
-std::string SocketAddress::HostAsURIString() const {
+std::string SocketAddress::host_as_uri_string() const {
   // If the hostname was a literal IP string, it may need to have square
-  // brackets added (for SocketAddress::ToString()).
-  if (!literal_ && !hostname_.empty())
-    return hostname_;
-  if (ip_.family() == AF_INET6) {
-    return "[" + ip_.ToString() + "]";
+  // brackets added (for SocketAddress::to_string()).
+  if (!_literal && !_hostname.empty())
+    return _hostname;
+  if (_ip.family() == AF_INET6) {
+    return "[" + _ip.to_string() + "]";
   } else {
-    return ip_.ToString();
+    return _ip.to_string();
   }
 }
 
-std::string SocketAddress::HostAsSensitiveURIString() const {
+std::string SocketAddress::host_as_sensitive_uri_string() const {
   // If the hostname was a literal IP string, it may need to have square
-  // brackets added (for SocketAddress::ToString()).
-  if (!literal_ && !hostname_.empty())
-    return hostname_;
-  if (ip_.family() == AF_INET6) {
-    return "[" + ip_.ToSensitiveString() + "]";
+  // brackets added (for SocketAddress::to_string()).
+  if (!_literal && !_hostname.empty())
+    return _hostname;
+  if (_ip.family() == AF_INET6) {
+    return "[" + _ip.to_sensitive_string() + "]";
   } else {
-    return ip_.ToSensitiveString();
+    return _ip.to_sensitive_string();
   }
 }
 
-std::string SocketAddress::PortAsString() const {
+std::string SocketAddress::port_as_string() const {
   std::ostringstream ost;
-  ost << port_;
+  ost << _port;
   return ost.str();
 }
 
-std::string SocketAddress::ToString() const {
+std::string SocketAddress::to_string() const {
   std::ostringstream ost;
   ost << *this;
   return ost.str();
 }
 
-std::string SocketAddress::ToSensitiveString() const {
+std::string SocketAddress::to_sensitive_string() const {
   std::ostringstream ost;
-  ost << HostAsSensitiveURIString() << ":" << port();
+  ost << host_as_sensitive_uri_string() << ":" << port();
   return ost.str();
 }
 
-bool SocketAddress::FromString(const std::string& str) {
+bool SocketAddress::from_string(const std::string& str) {
   if (str.at(0) == '[') {
     std::string::size_type closebracket = str.rfind(']');
     if (closebracket != std::string::npos) {
       std::string::size_type colon = str.find(':', closebracket);
       if (colon != std::string::npos && colon > closebracket) {
-        SetPort(strtoul(str.substr(colon + 1).c_str(), NULL, 10));
-        SetIP(str.substr(1, closebracket - 1));
+        set_port(strtoul(str.substr(colon + 1).c_str(), NULL, 10));
+        set_ip(str.substr(1, closebracket - 1));
       } else {
         return false;
       }
@@ -953,19 +1016,19 @@ bool SocketAddress::FromString(const std::string& str) {
     std::string::size_type pos = str.find(':');
     if (std::string::npos == pos)
       return false;
-    SetPort(strtoul(str.substr(pos + 1).c_str(), NULL, 10));
-    SetIP(str.substr(0, pos));
+    set_port(strtoul(str.substr(pos + 1).c_str(), NULL, 10));
+    set_ip(str.substr(0, pos));
   }
   return true;
 }
 
 std::ostream& operator<<(std::ostream& os, const SocketAddress& addr) {
-  os << addr.HostAsURIString() << ":" << addr.port();
+  os << addr.host_as_uri_string() << ":" << addr.port();
   return os;
 }
 
-bool SocketAddress::IsAnyIP() const {
-  return IPIsAny(ip_);
+bool SocketAddress::is_any_ip() const {
+  return IPIsAny(_ip);
 }
 
 bool IPIsLoopback(const IPAddress& ip) {
@@ -979,9 +1042,9 @@ bool IPIsLoopback(const IPAddress& ip) {
   }
   return false;
 }
-bool SocketAddress::IsLoopbackIP() const {
-  return IPIsLoopback(ip_) || (IPIsAny(ip_) &&
-                               0 == strcmp(hostname_.c_str(), "localhost"));
+bool SocketAddress::is_loopback_ip() const {
+  return IPIsLoopback(_ip) || (IPIsAny(_ip) &&
+                               0 == strcmp(_hostname.c_str(), "localhost"));
 }
 
 bool IsPrivateV4(uint32_t ip_in_host_order) {
@@ -1001,7 +1064,7 @@ bool IPIsLinkLocal(const IPAddress& ip) {
 bool IPIsPrivate(const IPAddress& ip) {
   switch (ip.family()) {
     case AF_INET: {
-      return IsPrivateV4(ip.v4AddressAsHostOrderInteger());
+      return IsPrivateV4(ip.ipv4_address_host());
     }
     case AF_INET6: {
       return IPIsLinkLocal(ip) || IPIsLoopback(ip);
@@ -1010,40 +1073,40 @@ bool IPIsPrivate(const IPAddress& ip) {
   return false;
 }
 
-bool SocketAddress::IsPrivateIP() const {
-  return IPIsPrivate(ip_);
+bool SocketAddress::is_private_ip() const {
+  return IPIsPrivate(_ip);
 }
 
-bool SocketAddress::IsUnresolvedIP() const {
-  return IPIsUnspec(ip_) && !literal_ && !hostname_.empty();
+bool SocketAddress::is_unresolved_ip() const {
+  return IPIsUnspec(_ip) && !_literal && !_hostname.empty();
 }
 
 bool SocketAddress::operator==(const SocketAddress& addr) const {
-  return EqualIPs(addr) && EqualPorts(addr);
+  return equal_ips(addr) && equal_ports(addr);
 }
 
 bool SocketAddress::operator<(const SocketAddress& addr) const {
-  if (ip_ != addr.ip_)
-    return ip_ < addr.ip_;
+  if (_ip != addr._ip)
+    return _ip < addr._ip;
 
   // We only check hostnames if both IPs are ANY or unspecified.  This matches
-  // EqualIPs().
-  if ((IPIsAny(ip_) || IPIsUnspec(ip_)) && hostname_ != addr.hostname_)
-    return hostname_ < addr.hostname_;
+  // equal_ips().
+  if ((IPIsAny(_ip) || IPIsUnspec(_ip)) && _hostname != addr._hostname)
+    return _hostname < addr._hostname;
 
-  return port_ < addr.port_;
+  return _port < addr._port;
 }
 
-bool SocketAddress::EqualIPs(const SocketAddress& addr) const {
-  return (ip_ == addr.ip_) &&
-      ((!IPIsAny(ip_) && !IPIsUnspec(ip_)) || (hostname_ == addr.hostname_));
+bool SocketAddress::equal_ips(const SocketAddress& addr) const {
+  return (_ip == addr._ip) &&
+      ((!IPIsAny(_ip) && !IPIsUnspec(_ip)) || (_hostname == addr._hostname));
 }
 
-bool SocketAddress::EqualPorts(const SocketAddress& addr) const {
-  return (port_ == addr.port_);
+bool SocketAddress::equal_ports(const SocketAddress& addr) const {
+  return (_port == addr._port);
 }
 
-size_t HashIP(const IPAddress& ip) {
+int32_t HashIP(const IPAddress& ip) {
   switch (ip.family()) {
     case AF_INET: {
       return ip.ipv4_address().s_addr;
@@ -1058,63 +1121,63 @@ size_t HashIP(const IPAddress& ip) {
   return 0;
 }
 
-size_t SocketAddress::Hash() const {
-  size_t h = 0;
-  h ^= HashIP(ip_);
-  h ^= port_ | (port_ << 16);
+int32_t SocketAddress::hash() const {
+  int32_t h = 0;
+  h ^= HashIP(_ip);
+  h ^= _port | (_port << 16);
   return h;
 }
 
-void SocketAddress::ToSockAddr(sockaddr_in* saddr) const {
+void SocketAddress::to_sock_addr(sockaddr_in* saddr) const {
   memset(saddr, 0, sizeof(*saddr));
-  if (ip_.family() != AF_INET) {
+  if (_ip.family() != AF_INET) {
     saddr->sin_family = AF_UNSPEC;
     return;
   }
   saddr->sin_family = AF_INET;
-  saddr->sin_port = HostToNetwork16(port_);
-  if (IPIsAny(ip_)) {
+  saddr->sin_port = hton16(_port);
+  if (IPIsAny(_ip)) {
     saddr->sin_addr.s_addr = INADDR_ANY;
   } else {
-    saddr->sin_addr = ip_.ipv4_address();
+    saddr->sin_addr = _ip.ipv4_address();
   }
 }
 
-bool SocketAddress::FromSockAddr(const sockaddr_in& saddr) {
+bool SocketAddress::from_sock_addr(const sockaddr_in& saddr) {
   if (saddr.sin_family != AF_INET)
     return false;
-  SetIP(NetworkToHost32(saddr.sin_addr.s_addr));
-  SetPort(NetworkToHost16(saddr.sin_port));
-  literal_ = false;
+  set_ip(ntoh32(saddr.sin_addr.s_addr));
+  set_port(ntoh16(saddr.sin_port));
+  _literal = false;
   return true;
 }
 
-static size_t ToSockAddrStorageHelper(sockaddr_storage* addr,
+static int32_t to_sock_addr_storageHelper(sockaddr_storage* addr,
                                       IPAddress ip,
                                       uint16_t port,
-                                      int scope_id) {
+                                      int32_t scope_id) {
   memset(addr, 0, sizeof(sockaddr_storage));
   addr->ss_family = static_cast<unsigned short>(ip.family());
   if (addr->ss_family == AF_INET6) {
     sockaddr_in6* saddr = reinterpret_cast<sockaddr_in6*>(addr);
     saddr->sin6_addr = ip.ipv6_address();
-    saddr->sin6_port = HostToNetwork16(port);
+    saddr->sin6_port = hton16(port);
     saddr->sin6_scope_id = scope_id;
     return sizeof(sockaddr_in6);
   } else if (addr->ss_family == AF_INET) {
     sockaddr_in* saddr = reinterpret_cast<sockaddr_in*>(addr);
     saddr->sin_addr = ip.ipv4_address();
-    saddr->sin_port = HostToNetwork16(port);
+    saddr->sin_port = hton16(port);
     return sizeof(sockaddr_in);
   }
   return 0;
 }
 
-size_t SocketAddress::ToDualStackSockAddrStorage(sockaddr_storage *addr) const {
-  return ToSockAddrStorageHelper(addr, ip_.AsIPv6Address(), port_, scope_id_);
+int32_t SocketAddress::to_dual_stack_sock_addr_storage(sockaddr_storage *addr) const {
+  return to_sock_addr_storageHelper(addr, _ip.as_ipv6_address(), _port, _scope_id);
 }
 
-size_t SocketAddress::ToSockAddrStorage(sockaddr_storage* addr) const {
-  return ToSockAddrStorageHelper(addr, ip_, port_, scope_id_);
+int32_t SocketAddress::to_sock_addr_storage(sockaddr_storage* addr) const {
+  return to_sock_addr_storageHelper(addr, _ip, _port, _scope_id);
 }
 }  // namespace os
