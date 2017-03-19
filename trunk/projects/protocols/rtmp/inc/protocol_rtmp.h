@@ -152,6 +152,67 @@ int32_t protocol_rtmp_bandwidth_check(protocol_rtmp_t rtmp,
     int32_t* play_duration, int32_t* publish_duration
 );
 
+/*************************************************************
+**************************************************************
+* h264 raw codec
+**************************************************************
+*************************************************************/
+/**
+* write h.264 raw frame over RTMP to rtmp server.
+* @param frames the input h264 raw data, encoded h.264 I/P/B frames data.
+*       frames can be one or more than one frame,
+*       each frame prefixed h.264 annexb header, by N[00] 00 00 01, where N>=0,
+*       for instance, frame = header(00 00 00 01) + payload(67 42 80 29 95 A0 14 01 6E 40)
+*       about annexb, @see H.264-AVC-ISO_IEC_14496-10.pdf, page 211.
+* @param frames_size the size of h264 raw data.
+*       assert frames_size > 0, at least has 1 bytes header.
+* @param dts the dts of h.264 raw data.
+* @param pts the pts of h.264 raw data.
+*
+* @remark, user should free the frames.
+* @remark, the tbn of dts/pts is 1/1000 for RTMP, that is, in ms.
+* @remark, cts = pts - dts
+* @remark, use srs_h264_startswith_annexb to check whether frame is annexb format.
+* @example /trunk/research/librtmp/srs_h264_raw_publish.c
+* @see https://github.com/ossrs/srs/issues/66
+*
+* @return 0, success; otherswise, failed.
+*       for dvbsp error, @see srs_h264_is_dvbsp_error().
+*       for duplictated sps error, @see srs_h264_is_duplicated_sps_error().
+*       for duplictated pps error, @see srs_h264_is_duplicated_pps_error().
+*/
+/**
+For the example file:
+    http://winlinvip.github.io/srs.release/3rdparty/720p.h264.raw
+The data sequence is:
+    // SPS
+    000000016742802995A014016E40
+    // PPS
+    0000000168CE3880
+    // IFrame
+    0000000165B8041014C038008B0D0D3A071.....
+    // PFrame
+    0000000141E02041F8CDDC562BBDEFAD2F.....
+User can send the SPS+PPS, then each frame:
+    // SPS+PPS
+    srs_h264_write_raw_frames('000000016742802995A014016E400000000168CE3880', size, dts, pts)
+    // IFrame
+    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
+    // PFrame
+    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts)
+User also can send one by one:
+    // SPS
+    srs_h264_write_raw_frames('000000016742802995A014016E4', size, dts, pts)
+    // PPS
+    srs_h264_write_raw_frames('00000000168CE3880', size, dts, pts)
+    // IFrame
+    srs_h264_write_raw_frames('0000000165B8041014C038008B0D0D3A071......', size, dts, pts)
+    // PFrame
+    srs_h264_write_raw_frames('0000000141E02041F8CDDC562BBDEFAD2F......', size, dts, pts)
+*/
+int32_t protocol_h264_write_raw_frames(protocol_rtmp_t rtmp,
+    uint8_t* frames, int32_t frames_size, uint32_t dts, uint32_t pts);
+
 #ifdef __cplusplus
 }
 #endif

@@ -97,6 +97,41 @@ int32_t protocol_rtmp_connect_app(protocol_rtmp_t rtmp) {
   protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
   return srs_rtmp_connect_app(pIns->srs_rtmp);
 }
+
+int32_t protocol_rtmp_connect_app2(protocol_rtmp_t rtmp,
+    char server_ip[128], char server[128],
+    char primary[128], char authors[128],
+    char version[32], int32_t* id, int32_t* pid) {
+  if (!rtmp)
+    return -1;
+  protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
+  return srs_rtmp_connect_app2(pIns->srs_rtmp, server_ip, server,
+                               primary, authors, version, id, pid);
+
+}
+
+int32_t protocol_rtmp_play_stream(protocol_rtmp_t rtmp) {
+  if (!rtmp)
+    return -1;
+  protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
+  return srs_rtmp_play_stream(pIns->srs_rtmp);
+}
+
+int32_t protocol_rtmp_publish_stream(protocol_rtmp_t rtmp) {
+  if (!rtmp)
+    return -1;
+  protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
+  return srs_rtmp_publish_stream(pIns->srs_rtmp);
+}
+
+int32_t protocol_h264_write_raw_frames(srs_rtmp_t rtmp,
+    uint8_t* frames, int32_t frames_size, uint32_t dts, uint32_t pts) {
+  if (!rtmp)
+    return -1;
+  protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
+  return srs_h264_write_raw_frames(pIns->srs_rtmp, (char*)frames, frames_size, dts, pts);
+}
+
 #ifdef __cplusplus
 }
 #endif
