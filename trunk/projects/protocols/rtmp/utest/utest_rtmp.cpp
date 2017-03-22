@@ -75,7 +75,8 @@ int32_t main(int32_t argc, char *argv[]) {
     //ERROR_H264_DROP_BEFORE_SPS_PPS      3043
     //ERROR_H264_DUPLICATED_SPS           3044
     //ERROR_H264_DUPLICATED_PPS           3045
-    if (ret != 3043 || ret != 3044 || ret != 3045) {
+    if (ret == 0) {
+    } else if (ret != 0 && (ret == 3043 || ret == 3044 || ret == 3045)) {
       logi("ignore duplicated sps/pps\n");
     } else {
       loge("send h264 raw data failed. ret=%d\n", ret);
