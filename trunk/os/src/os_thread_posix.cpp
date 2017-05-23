@@ -71,10 +71,10 @@ bool ThreadPosix::start(uint32_t & tid) {
   int ret = pthread_attr_setdetachstate(&_attr, PTHREAD_CREATE_DETACHED);
   // Set the stack stack size to 1M.
   ret |= pthread_attr_setstacksize(&_attr, 1024*1024);
-#ifdef WEBRTC_THREAD_RR
+#ifdef _OS_THREAD_RR
   const int policy = SCHED_RR;
 #else
-  const int policy = SCHED_FIFO;
+  const int policy = SCHED_OTHER;//SCHED_FIFO;
 #endif
   ret |= pthread_create(&_thread, &_attr, &thread_loop, this);
   if (ret)
@@ -160,6 +160,7 @@ void ThreadPosix::loop() {
   _mutex->lock();
   _dead = true;
   _mutex->unlock();
+  pthread_detach(pthread_self());
 }
 
 //static

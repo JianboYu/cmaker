@@ -71,7 +71,8 @@ int32_t main(int32_t argc, char *argv[]) {
     pts = dts;
     // send out the h264 packet over RTMP
     int ret = protocol_h264_write_raw_frames(rtmp, stream_buffer.get(), len, dts, pts);
-
+    //char type = 0x9;// SRS_RTMP_TYPE_VIDEO;
+    //int ret = protocol_rtmp_write_packet(rtmp, type, pts, (char*)stream_buffer.get(), len);
     //ERROR_H264_DROP_BEFORE_SPS_PPS      3043
     //ERROR_H264_DUPLICATED_SPS           3044
     //ERROR_H264_DUPLICATED_PPS           3045

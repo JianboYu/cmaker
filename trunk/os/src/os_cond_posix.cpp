@@ -39,7 +39,7 @@ bool CondPosix::wait_timeout(Mutex *mut, uint64_t ms) {
 #else
   clock_gettime(CLOCK_MONOTONIC, &ts);
 #endif
-  ts.tv_nsec += (ms - ((ms / 1000)* 1000)) * 1000000000;
+  ts.tv_nsec += (ms - ((ms / 1000)* 1000)) * 1000000;
 
   if (ts.tv_nsec >= 1000000000)
   {

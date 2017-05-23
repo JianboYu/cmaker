@@ -131,6 +131,14 @@ int32_t protocol_h264_write_raw_frames(srs_rtmp_t rtmp,
   protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
   return srs_h264_write_raw_frames(pIns->srs_rtmp, (char*)frames, frames_size, dts, pts);
 }
+int32_t protocol_rtmp_write_packet(protocol_rtmp_t rtmp,
+    char type, u_int32_t timestamp, char* data, int size) {
+  if (!rtmp)
+    return -1;
+  protocol_rtmp_instance *pIns = (protocol_rtmp_instance*)rtmp;
+  return srs_rtmp_write_packet(pIns->srs_rtmp, type, timestamp, data, size);
+}
+
 
 #ifdef __cplusplus
 }

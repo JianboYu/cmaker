@@ -213,6 +213,11 @@ User also can send one by one:
 int32_t protocol_h264_write_raw_frames(protocol_rtmp_t rtmp,
     uint8_t* frames, int32_t frames_size, uint32_t dts, uint32_t pts);
 
+int32_t protocol_rtmp_write_packet(protocol_rtmp_t rtmp,
+    char type, u_int32_t timestamp, char* data, int size
+);
+
+
 #ifdef __cplusplus
 }
 #endif

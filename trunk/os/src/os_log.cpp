@@ -34,7 +34,22 @@ int32_t log_getlevel() {
 
 static void os_printf(int32_t level, const char *tag, const char *fmt, va_list args) {
 #if defined(_OS_ANDROID)
-  //__android_log_vprint(ANDROID_LOG_ERROR, LOG_TAG, fmt, args);
+  int32_t log_level = ANDROID_LOG_INFO;
+  switch(level) {
+    case eLogVerbose:
+      log_level = ANDROID_LOG_VERBOSE;
+    break;
+    case eLogInfo:
+      log_level = ANDROID_LOG_INFO;
+    break;
+    case eLogWarn:
+      log_level = ANDROID_LOG_WARN;
+    break;
+    case eLogError:
+      log_level = ANDROID_LOG_ERROR;
+    break;
+  }
+  __android_log_vprint(log_level, tag, fmt, args);
   vfprintf(stderr, fmt, args);
 #else
   vfprintf(stderr, fmt, args);

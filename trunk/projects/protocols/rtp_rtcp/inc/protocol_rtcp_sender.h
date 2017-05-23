@@ -30,7 +30,6 @@
 #include "protocol_rtp_rtcp_defines.h"
 #include "protocol_rtcp_packet.h"
 #include "protocol_rtcp_utility.h"
-#include "protocol_bwe_defines.h"
 #include "protocol_remote_bitrate_estimator.h"
 #include "rtcp_packet/protocol_report_block.h"
 #include "rtcp_packet/protocol_tmmb_item.h"
