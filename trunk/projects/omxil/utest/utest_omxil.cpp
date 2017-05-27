@@ -60,7 +60,8 @@ OMX_ERRORTYPE sEmptyBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("EmptyBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    logv("EmptyBufferDone com: %p appdata: %p buffer: %p ts: %d\n",
+          hComponent, pAppData, pBuffer, pBuffer->nTimeStamp);
     OMXContext *omx_ctx = (OMXContext *)pAppData;
     int32_t status = cirq_enqueue(omx_ctx->ebd, pBuffer);
     CHECK_EQ(0, status);
@@ -71,7 +72,8 @@ OMX_ERRORTYPE sFillBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("FillBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    logv("FillBufferDone com: %p appdata: %p buffer: %p ts: %llu \n",
+          hComponent, pAppData, pBuffer, pBuffer->nTimeStamp);
     OMXContext *omx_ctx = (OMXContext *)pAppData;
     int32_t status = cirq_enqueue(omx_ctx->fbd, pBuffer);
     CHECK_EQ(0, status);
@@ -101,7 +103,7 @@ bool encoder_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logv("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 3600;
+    omx_ctx->ts += 40*1000;
   }
 
   pdata = NULL;

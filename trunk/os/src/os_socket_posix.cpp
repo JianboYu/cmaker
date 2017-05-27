@@ -120,7 +120,7 @@ int32_t SocketPosixImpl::SetTOS(const int32_t serviceType) {
 int32_t SocketPosixImpl::SetPCP(const int32_t /*pcp*/){
   return -1;
 }
-int32_t SocketPosixImpl::SendTo(const int8_t* buf, size_t len,
+int32_t SocketPosixImpl::SendTo(const int8_t* buf, int32_t len,
                          const socket_addr& to) {
   int size = sizeof(sockaddr);
   int retVal = sendto(_socket,buf, len, 0,

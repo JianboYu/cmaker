@@ -31,9 +31,14 @@ int32_t main(int32_t argc, char *argv[]) {
   uint8_t buf[1024] = {0};
   int64_t timestamp = 0;
   while(1) {
-    client->recv(buf, 1024, &timestamp);
-    logv("[Server]---ts: %lld str: %s\n", timestamp, buf);
-    client->send("Got it\n", 7);
+    int32_t recvd = client->recv(buf, 1024, &timestamp);
+    if (recvd > 0) {
+      logv("[Server]---ts: %lld str: %s\n", timestamp, buf);
+      client->send("Got it\n", 7);
+    } else {
+      logv("[Server]---revd: %d\n", recvd);
+      break;
+    }
     os_msleep(1000);
   }
 }

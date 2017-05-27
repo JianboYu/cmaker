@@ -1191,11 +1191,11 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
         source = inputBufferHeader->pBuffer + inputBufferHeader->nOffset;
         ((ive_video_encode_ip_t*)ps_encode_ip)->u4_is_last = 0;
         ((ive_video_encode_ip_t*)ps_encode_ip)->u4_timestamp_high = (inputBufferHeader->nTimeStamp) >> 32;
-        ((ive_video_encode_op_t*)ps_encode_ip)->u4_timestamp_low = (inputBufferHeader->nTimeStamp) & 0xFFFFFFFF;
+        ((ive_video_encode_ip_t*)ps_encode_ip)->u4_timestamp_low = (inputBufferHeader->nTimeStamp) & 0xFFFFFFFF;
     }
     else {
         if (mSawInputEOS){
-            ((ive_video_encode_op_t*)ps_encode_ip)->u4_is_last = 1;
+            ((ive_video_encode_ip_t*)ps_encode_ip)->u4_is_last = 1;
         }
         memset(ps_inp_raw_buf, 0, sizeof(iv_raw_buf_t));
         ps_inp_raw_buf->e_color_fmt = (IV_COLOR_FORMAT_T)mIvVideoColorFormat;

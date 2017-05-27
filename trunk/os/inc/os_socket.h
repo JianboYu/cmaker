@@ -5,8 +5,6 @@
 
 namespace os {
 
-typedef uint32_t size_t;
-
 #define SS_MAXSIZE 128
 #define SS_ALIGNSIZE (sizeof (uint64_t))
 #define SS_PAD1SIZE  (SS_ALIGNSIZE - sizeof(int16_t))
@@ -117,7 +115,7 @@ public:
   virtual int32_t SetPCP(const int32_t /*pcp*/) = 0;
 
   // Send buf of length len to the address specified by to.
-  virtual int32_t SendTo(const int8_t* buf, size_t len,
+  virtual int32_t SendTo(const int8_t* buf, int32_t len,
       const socket_addr& to) = 0;
 
   // Close socket and don't return until completed.

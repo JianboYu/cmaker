@@ -29,7 +29,7 @@ public:
                           const int8_t* optval, int32_t optlen) override;
   virtual int32_t SetTOS(const int32_t serviceType) override;
   virtual int32_t SetPCP(const int32_t /*pcp*/) override;
-  virtual int32_t SendTo(const int8_t* buf, size_t len,
+  virtual int32_t SendTo(const int8_t* buf, int32_t len,
                          const socket_addr& to) override;
 
   virtual void CloseBlocking() override;

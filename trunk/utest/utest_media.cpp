@@ -5,11 +5,15 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <arpa/inet.h>
 #include <os_typedefs.h>
 #include <os_assert.h>
 #include <os_log.h>
 #include <os_time.h>
 #include <os_thread.h>
+#include <os_socket.h>
+#include <os_socket_manager.h>
+
 #include <core_scoped_ptr.h>
 #include <utility_circle_queue.h>
 #include <utility_buffer_queue.h>
@@ -67,8 +71,8 @@ class VerifyingRtxReceiver : public NullRtpData {
     log_verbose("tag", "RTP header:\n");
     log_verbose("tag", "  markebit: %d\n"
                        "  payload: %d\n"
-                       "  seq: %d\n"
-                       "  ts: %d\n"
+                       "  seq: %u\n"
+                       "  ts: %lu\n"
                        "  ssrc: %08x\n",
                 rtp_header->header.markerBit,
                 rtp_header->header.payloadType,
@@ -112,6 +116,16 @@ public:
                        const PacketOptions& options) {
     logv("SendRtp idx: %08d addr: %p size: %d\n", _count, packet, length);
     _count++;
+    socket_addr sock_dst_addr;
+    sock_dst_addr._sockaddr_in.sin_family = AF_INET;
+    sock_dst_addr._sockaddr_in.sin_port = htons(25050);
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("172.16.104.13");
+
+    //DumpRTPHeader((uint8_t*)packet);
+    int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
+    logv("SendRTP data size: %d\n", ret);
+
+#if 0
     const unsigned char* ptr = static_cast<const unsigned char*>(packet);
     //DumpRTPHeader((uint8_t*)ptr);
     uint32_t ssrc = (ptr[8] << 24) + (ptr[9] << 16) + (ptr[10] << 8) + ptr[11];
@@ -120,11 +134,7 @@ public:
     uint16_t sequence_number = (ptr[2] << 8) + ptr[3];
     size_t packet_length = length;
     uint8_t restored_packet[1500];
-    RTPHeader header;
-    std::unique_ptr<RtpHeaderParser> parser(RtpHeaderParser::Create());
-    if (!parser->Parse(ptr, length, &header)) {
-      return false;
-    }
+
     if (!_rtp_payload_registry->IsRtx(header)) {
       // Don't store retransmitted packets since we compare it to the list
       // created by the receiver.
@@ -157,10 +167,11 @@ public:
       return false;
     }
     if (!_rtp_receiver->IncomingRtpPacket(header, ptr + header.headerLength,
-                                          packet_length - header.headerLength,
+                                          sizepacket_length - header.headerLength,
                                           payload_specific, true)) {
       return false;
     }
+#endif
    return true;
   }
   virtual bool SendRtcp(const uint8_t* packet, size_t length) {
@@ -172,7 +183,45 @@ public:
     _rtp_sender = sender;
     _rtp_payload_registry = rtp_payload_registry;
     _rtp_receiver = receiver;
+
+    uint8_t threads = 1;
+    _sock_mgr = SocketManager::Create(0, threads);
+    _rtp_sock = Socket::CreateSocket(0, _sock_mgr,
+                                      this,
+                                      incomingSocketCallback);
+    socket_addr sock_addr;
+    sock_addr._sockaddr_in.sin_family = AF_INET;
+    sock_addr._sockaddr_in.sin_port = htons(15050);
+    sock_addr._sockaddr_in.sin_addr = inet_addr("172.16.1.88");
+
+    CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
+    CHECK_EQ(true, _rtp_sock->StartReceiving());
   }
+  static void incomingSocketCallback(CallbackObj obj, const int8_t* buf,
+                                      int32_t len, const socket_addr* from) {
+    MockTransport *pThis = static_cast<MockTransport*>(obj);
+    const uint8_t *ptr = (const uint8_t*)buf;
+    int32_t packet_length = len;
+    RTPHeader header;
+    std::unique_ptr<RtpHeaderParser> parser(RtpHeaderParser::Create());
+    if (!parser->Parse(ptr, len, &header)) {
+      return;
+    }
+    PayloadUnion payload_specific;
+    if (!pThis->_rtp_payload_registry->GetPayloadSpecifics(header.payloadType,
+                                                    &payload_specific)) {
+      return;
+    }
+
+    if (!pThis->_rtp_receiver->IncomingRtpPacket(header, ptr,
+                                          packet_length,
+                                          payload_specific, true)) {
+      logv("incomingRTPSocketCallback error\n");
+    }
+
+    //logv("incoming buf[%p] size[%d] from[%p]\n", buf, len, from);
+  }
+
   void DropEveryNthPacket(int n) { _packet_loss = n; }
   void DropConsecutivePackets(int start, int total) {
     _consecutive_drop_start = start;
@@ -190,6 +239,10 @@ private:
   RtpReceiver* _rtp_receiver;
   RTPSender* _rtp_sender;
   std::set<uint16_t> _expected_sequence_numbers;
+
+  //udp transport implement
+  SocketManager *_sock_mgr;
+  Socket *_rtp_sock;
 };
 
 
@@ -274,7 +327,7 @@ bool thread_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logi("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 3600;
+    omx_ctx->ts += 33*1000;
   }
 
   pdata = NULL;
@@ -289,10 +342,14 @@ bool thread_loop(void *ctx) {
       fragment.fragmentationTimeDiff[0] = 0;
       fragment.fragmentationPlType[0] = 0;
 
-      logi("SendOutgoingData: %p size: %d\n", pBuffer->pBuffer, pBuffer->nFilledLen);
+      logi("SendOutgoingData: %p size: %d ts: %lld\n",
+            pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
-                     kVideoFrameDelta, kPayloadType, pBuffer->nTimeStamp,
-                     pBuffer->nTimeStamp / 90, pBuffer->pBuffer, pBuffer->nFilledLen, &fragment, NULL);
+                     pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
+                        kVideoFrameKey : kVideoFrameDelta,
+                     kPayloadType, (pBuffer->nTimeStamp / 1000)*90,
+                     pBuffer->nTimeStamp / 1000, pBuffer->pBuffer,
+                     pBuffer->nFilledLen, &fragment, NULL);
       CHECK_EQ(0, ret);
     }
     pBuffer->nFlags = 0;
@@ -303,7 +360,7 @@ bool thread_loop(void *ctx) {
     logi("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(40);
+  os_msleep(50);
   return true;
 }
 
@@ -468,7 +525,7 @@ int32_t main(int argc, char *argv[]) {
                               1357,
                               2468);
   CHECK_GT(ret, 0);
-  DumpRTPHeader(rtp_header.get());
+  //DumpRTPHeader(rtp_header.get());
 
   scoped_ptr<RTPPayloadRegistry> rtp_payload_registry(new RTPPayloadRegistry(
                                 RTPPayloadStrategy::CreateStrategy(false)));
