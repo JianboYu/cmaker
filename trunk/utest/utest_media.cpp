@@ -73,12 +73,14 @@ class VerifyingRtxReceiver : public NullRtpData {
                        "  payload: %d\n"
                        "  seq: %u\n"
                        "  ts: %lu\n"
-                       "  ssrc: %08x\n",
+                       "  ssrc: %08x\n"
+                       "  frametype: %d\n",
                 rtp_header->header.markerBit,
                 rtp_header->header.payloadType,
                 rtp_header->header.sequenceNumber,
                 rtp_header->header.timestamp,
-                rtp_header->header.ssrc);
+                rtp_header->header.ssrc,
+                rtp_header->frameType);
     log_verbose("tag", "Recevied payload data addr: %p size: %d\n", data, size);
     return 0;
   }
@@ -109,7 +111,9 @@ public:
         _count_rtx_ssrc(0),
         _rtp_payload_registry(NULL),
         _rtp_receiver(NULL),
-        _rtp_sender(NULL) {}
+        _rtp_sender(NULL) {
+        _fp = fopen("rtp.h264", "w");
+  }
 
   virtual bool SendRtp(const uint8_t* packet,
                        size_t length,
@@ -125,53 +129,6 @@ public:
     int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
     logv("SendRTP data size: %d\n", ret);
 
-#if 0
-    const unsigned char* ptr = static_cast<const unsigned char*>(packet);
-    //DumpRTPHeader((uint8_t*)ptr);
-    uint32_t ssrc = (ptr[8] << 24) + (ptr[9] << 16) + (ptr[10] << 8) + ptr[11];
-    if (ssrc == _rtx_ssrc)
-      _count_rtx_ssrc++;
-    uint16_t sequence_number = (ptr[2] << 8) + ptr[3];
-    size_t packet_length = length;
-    uint8_t restored_packet[1500];
-
-    if (!_rtp_payload_registry->IsRtx(header)) {
-      // Don't store retransmitted packets since we compare it to the list
-      // created by the receiver.
-      _expected_sequence_numbers.insert(_expected_sequence_numbers.end(),
-                                        sequence_number);
-    }
-    if (_packet_loss > 0) {
-      if ((_count % _packet_loss) == 0) {
-        return true;
-      }
-    } else if (_count >= _consecutive_drop_start &&
-               _count < _consecutive_drop_end) {
-      return true;
-    }
-    if (_rtp_payload_registry->IsRtx(header)) {
-      // Remove the RTX header and parse the original RTP header.
-      /*CHECK_EQ(true, _rtp_payload_registry->RestoreOriginalPacket(
-          restored_packet, ptr, &packet_length, _rtp_receiver->SSRC(), header));*/
-      if (!parser->Parse(restored_packet, packet_length, &header)) {
-        return false;
-      }
-      ptr = restored_packet;
-    } else {
-      _rtp_payload_registry->SetIncomingPayloadType(header);
-    }
-
-    PayloadUnion payload_specific;
-    if (!_rtp_payload_registry->GetPayloadSpecifics(header.payloadType,
-                                                    &payload_specific)) {
-      return false;
-    }
-    if (!_rtp_receiver->IncomingRtpPacket(header, ptr + header.headerLength,
-                                          sizepacket_length - header.headerLength,
-                                          payload_specific, true)) {
-      return false;
-    }
-#endif
    return true;
   }
   virtual bool SendRtcp(const uint8_t* packet, size_t length) {
@@ -243,6 +200,7 @@ private:
   //udp transport implement
   SocketManager *_sock_mgr;
   Socket *_rtp_sock;
+  FILE *_fp;
 };
 
 
@@ -344,6 +302,14 @@ bool thread_loop(void *ctx) {
 
       logi("SendOutgoingData: %p size: %d ts: %lld\n",
             pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
+      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
+      CHECK_EQ(writed, pBuffer->nFilledLen);
+      writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
+      CHECK_GT(writed, (uint32_t)0);
+      fflush(omx_ctx->fp_encoded);
+      fflush(omx_ctx->fp_len);
+
+      logi("Buffer flags: %08x\n", pBuffer->nFlags);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
                         kVideoFrameKey : kVideoFrameDelta,

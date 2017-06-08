@@ -32,6 +32,11 @@ int32_t log_getlevel() {
   return gs_log_level;
 }
 
+#define CONSOLE_COLOR_R "\033[0;31m"
+#define CONSOLE_COLOR_G "\033[0;32m"
+#define CONSOLE_COLOR_Y "\033[0;33m"
+#define CONSOLE_COLOR_E "\033[m"
+
 static void os_printf(int32_t level, const char *tag, const char *fmt, va_list args) {
 #if defined(_OS_ANDROID)
   int32_t log_level = ANDROID_LOG_INFO;
@@ -50,10 +55,23 @@ static void os_printf(int32_t level, const char *tag, const char *fmt, va_list a
     break;
   }
   __android_log_vprint(log_level, tag, fmt, args);
-  vfprintf(stderr, fmt, args);
-#else
-  vfprintf(stderr, fmt, args);
 #endif
+  const char *pcolor = CONSOLE_COLOR_R;
+  switch(level) {
+    case eLogVerbose:
+    case eLogInfo:
+      pcolor = CONSOLE_COLOR_G;
+    break;
+    case eLogWarn:
+      pcolor = CONSOLE_COLOR_Y;
+    break;
+    case eLogError:
+      pcolor = CONSOLE_COLOR_R;
+    break;
+  }
+
+  fprintf(stderr, "[%s%s%s]", pcolor, tag, CONSOLE_COLOR_E);
+  fprintf(stderr, fmt, args);
 }
 
 void log_trace(int32_t level, const char *tag, const char *fmt, ...) {

@@ -15,16 +15,13 @@
 #include <memory>
 #include <vector>
 
-#include "os_assert.h"
-//#include "system_wrappers/interface/logging.h"
-//#include "webrtc/base/trace_event.h"
+#include <os_log.h>
+#include <os_assert.h>
 #include "protocol_rtp_sender_video.h"
 #include "protocol_rtp_rtcp_defines.h"
 #include "protocol_byte_io.h"
 #include "protocol_producer_fec.h"
 #include "protocol_rtp_format_video_generic.h"
-//#include "rtp_rtcp/source/rtp_format_vp8.h"
-//#include "rtp_rtcp/source/rtp_format_vp9.h"
 
 namespace protocol {
 enum { REDForFECHeaderLength = 1 };
@@ -102,11 +99,10 @@ void RTPSenderVideo::SendVideoPacket(uint8_t* data_buffer,
     AutoLock cs(stats_crit_.get());
     video_bitrate_.Update(payload_length + rtp_header_length,
                           clock_->TimeInMilliseconds());
-    /*TRACE_EVENT_INSTANT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"),
-                         "Video::PacketNormal", "timestamp", capture_timestamp,
-                         "seqnum", seq_num);*/
+    logv("Video::PacketNormal timestamp[%d] seqnum[%d]\n",
+          capture_timestamp, seq_num);
   } else {
-    LOG(LS_WARNING) << "Failed to send video packet " << seq_num;
+    logw("Failed to send video packet seqnum[%d] \n", seq_num);
   }
 }
 
@@ -149,11 +145,10 @@ void RTPSenderVideo::SendVideoPacketAsRed(uint8_t* data_buffer,
           RtpPacketSender::kLowPriority) == 0) {
     AutoLock cs(stats_crit_.get());
     video_bitrate_.Update(red_packet->length(), clock_->TimeInMilliseconds());
-    /*TRACE_EVENT_INSTANT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"),
-                         "Video::PacketRed", "timestamp", capture_timestamp,
-                         "seqnum", media_seq_num);*/
+    logv("Video::PacketRed timestamp[%d] seqnum[%d]\n", capture_timestamp,
+          media_seq_num);
   } else {
-    LOG(LS_WARNING) << "Failed to send RED packet " << media_seq_num;
+    logw("Failed to send RED packet media_seq_num[%d]\n", media_seq_num);
   }
   for (RedPacket* fec_packet : fec_packets) {
     if (_rtpSender.SendToNetwork(
@@ -162,12 +157,11 @@ void RTPSenderVideo::SendVideoPacketAsRed(uint8_t* data_buffer,
             RtpPacketSender::kLowPriority) == 0) {
       AutoLock cs(stats_crit_.get());
       fec_bitrate_.Update(fec_packet->length(), clock_->TimeInMilliseconds());
-      /*TRACE_EVENT_INSTANT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"),
-                           "Video::PacketFec", "timestamp", capture_timestamp,
-                           "seqnum", next_fec_sequence_number);*/
+      logv("Video::PacketFec timestamp[%d] seqnum[%d]\n", capture_timestamp,
+           next_fec_sequence_number);
     } else {
-      LOG(LS_WARNING) << "Failed to send FEC packet "
-                      << next_fec_sequence_number;
+      logw("Failed to send FEC packet next_fec_sequence_number[%d]\n",
+           next_fec_sequence_number);
     }
     delete fec_packet;
     ++next_fec_sequence_number;
@@ -329,19 +323,17 @@ int32_t RTPSenderVideo::SendVideo(const RtpVideoCodecTypes videoType,
 
     if (first_frame) {
       if (first) {
-        LOG(LS_INFO)
-            << "Sent first RTP packet of the first video frame (pre-pacer)\n";
+        logi("Sent first RTP packet of the first video frame (pre-pacer)\n");
       }
       if (last) {
-        LOG(LS_INFO)
-            << "Sent last RTP packet of the first video frame (pre-pacer)\n";
+        logi("Sent last RTP packet of the first video frame (pre-pacer)\n");
       }
     }
     first = false;
   }
 
-  /*TRACE_EVENT_ASYNC_END1(
-      "webrtc", "Video", capture_time_ms, "timestamp", _rtpSender.Timestamp());*/
+  log_verbose("Video", "CaptureTime[%d] rtp ts[%d]\n", capture_time_ms,
+              _rtpSender.Timestamp());
   return 0;
 }
 

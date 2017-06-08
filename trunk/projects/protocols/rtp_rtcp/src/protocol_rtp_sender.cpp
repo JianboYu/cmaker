@@ -13,7 +13,8 @@
 #include <algorithm>
 #include <utility>
 
-#include "os_assert.h"
+#include <os_log.h>
+#include <os_assert.h>
 
 #if 0
 #include "system_wrappers/interface/logging.h"
@@ -46,7 +47,6 @@ namespace {
 const size_t kRtpHeaderLength = 12;
 const uint16_t kMaxInitRtpSeqNumber = 32767;  // 2^15 -1.
 
-#if 0
 const char* FrameTypeToString(FrameType frame_type) {
   switch (frame_type) {
     case kEmptyFrame:
@@ -58,7 +58,6 @@ const char* FrameTypeToString(FrameType frame_type) {
   }
   return "";
 }
-#endif
 
 // TODO(holmer): Merge this with the implementation in
 // remote_bitrate_estimator_abs_send_time.cc.
@@ -486,16 +485,16 @@ int32_t RTPSender::SendOutgoingData(FrameType frame_type,
 
   int32_t ret_val;
   if (audio_configured_) {
-    /*TRACE_EVENT_ASYNC_STEP1("webrtc", "Audio", capture_timestamp,
-                            "Send", "type", FrameTypeToString(frame_type));*/
+    log_verbose("Audio", "Send capture timestamp[%d] type[%s]\n",capture_timestamp,
+                 FrameTypeToString(frame_type));
     assert(frame_type == kAudioFrameSpeech || frame_type == kAudioFrameCN ||
            frame_type == kEmptyFrame);
 
     ret_val = audio_->SendAudio(frame_type, payload_type, capture_timestamp,
                                 payload_data, payload_size, fragmentation);
   } else {
-    /*TRACE_EVENT_ASYNC_STEP1("webrtc", "Video", capture_time_ms,
-                            "Send", "type", FrameTypeToString(frame_type));*/
+    log_verbose("Video", "Send capture timestamp[%d] type[%s]\n",capture_timestamp,
+                 FrameTypeToString(frame_type));
     assert(frame_type != kAudioFrameSpeech && frame_type != kAudioFrameCN);
 
     if (frame_type == kEmptyFrame)

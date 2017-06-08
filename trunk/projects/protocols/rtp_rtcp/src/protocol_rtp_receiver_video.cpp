@@ -12,6 +12,7 @@
 #include <string.h>
 #include <memory>
 
+#include <os_log.h>
 #include "os_assert.h"
 #include "protocol_rtp_cvo.h"
 #include "protocol_rtp_payload_registry.h"
@@ -53,9 +54,9 @@ int32_t RTPReceiverVideo::ParseRtpPacket(WebRtcRTPHeader* rtp_header,
                                          size_t payload_length,
                                          int64_t timestamp_ms,
                                          bool is_first_packet) {
-  /*TRACE_EVENT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"), "Video::ParseRtp",
-               "seqnum", rtp_header->header.sequenceNumber, "timestamp",
-               rtp_header->header.timestamp);*/
+  logv("rtp Video::ParseRtp seqnum[%d] timestamp[%d]\n",
+               rtp_header->header.sequenceNumber,
+               rtp_header->header.timestamp);
   rtp_header->type.Video.codec = specific_payload.Video.videoCodecType;
 
   CHECK_GE(payload_length, rtp_header->header.paddingLength);
@@ -68,14 +69,14 @@ int32_t RTPReceiverVideo::ParseRtpPacket(WebRtcRTPHeader* rtp_header,
   }
 
   if (first_packet_received_()) {
-    LOG(LS_INFO) << "Received first video RTP packet\n";
+    logi("Received first video RTP packet\n");
   }
 
   // We are not allowed to hold a critical section when calling below functions.
   std::unique_ptr<RtpDepacketizer> depacketizer(
       RtpDepacketizer::Create(rtp_header->type.Video.codec));
   if (depacketizer.get() == NULL) {
-    LOG(LS_ERROR) << "Failed to create depacketizer.\n";
+    loge("Failed to create depacketizer.\n");
     return -1;
   }
 
