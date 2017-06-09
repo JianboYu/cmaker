@@ -16,6 +16,11 @@
 #include <vector>
 
 #include <os_log.h>
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPSenderVideo"
+#endif
+
 #include <os_assert.h>
 #include "protocol_rtp_sender_video.h"
 #include "protocol_rtp_rtcp_defines.h"
@@ -99,10 +104,10 @@ void RTPSenderVideo::SendVideoPacket(uint8_t* data_buffer,
     AutoLock cs(stats_crit_.get());
     video_bitrate_.Update(payload_length + rtp_header_length,
                           clock_->TimeInMilliseconds());
-    logv("Video::PacketNormal timestamp[%d] seqnum[%d]\n",
+    logv("Video::PacketNormal timestamp[%u] seqnum[%u]\n",
           capture_timestamp, seq_num);
   } else {
-    logw("Failed to send video packet seqnum[%d] \n", seq_num);
+    logw("Failed to send video packet seqnum[%u] \n", seq_num);
   }
 }
 
@@ -145,7 +150,7 @@ void RTPSenderVideo::SendVideoPacketAsRed(uint8_t* data_buffer,
           RtpPacketSender::kLowPriority) == 0) {
     AutoLock cs(stats_crit_.get());
     video_bitrate_.Update(red_packet->length(), clock_->TimeInMilliseconds());
-    logv("Video::PacketRed timestamp[%d] seqnum[%d]\n", capture_timestamp,
+    logv("Video::PacketRed timestamp[%u] seqnum[%d]\n", capture_timestamp,
           media_seq_num);
   } else {
     logw("Failed to send RED packet media_seq_num[%d]\n", media_seq_num);

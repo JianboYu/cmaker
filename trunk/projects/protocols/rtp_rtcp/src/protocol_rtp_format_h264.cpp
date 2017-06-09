@@ -12,7 +12,8 @@
 #include <string.h>
 #include <vector>
 
-#include "os_assert.h"
+#include <os_log.h>
+#include <os_assert.h>
 #include "protocol_byte_io.h"
 #include "protocol_sps_vui_rewriter.h"
 #include "protocol_h264_common.h"
@@ -28,7 +29,7 @@ static const size_t kFuAHeaderSize = 2;
 static const size_t kLengthFieldSize = 2;
 static const size_t kStapAHeaderSize = kNalHeaderSize + kLengthFieldSize;
 
-static const char* kSpsValidHistogramName = "WebRTC.Video.H264.SpsValid";
+static const char* kSpsValidHistogramName = "Protocol.Video.H264.SpsValid";
 enum SpsValidEvent {
   kReceivedSpsPocOk = 0,
   kReceivedSpsVuiOk = 1,
@@ -331,7 +332,7 @@ bool RtpDepacketizerH264::Parse(ParsedPayload* parsed_payload,
                                 size_t payload_data_length) {
   CHECK(parsed_payload);
   if (payload_data_length == 0) {
-    LOG(LS_ERROR) << "Empty payload.";
+    loge("Empty payload.\n");
     return false;
   }
 
@@ -377,12 +378,12 @@ bool RtpDepacketizerH264::ProcessStapAOrSingleNalu(
   if (nal_type == H264::NaluType::kStapA) {
     // Skip the StapA header (StapA NAL type + length).
     if (length_ <= kStapAHeaderSize) {
-      LOG(LS_ERROR) << "StapA header truncated.";
+      loge("StapA header truncated.\n");
       return false;
     }
 
     if (!ParseStapAStartOffsets(nalu_start, nalu_length, &nalu_start_offsets)) {
-      LOG(LS_ERROR) << "StapA packet with incorrect NALU packet lengths.";
+      loge("StapA packet with incorrect NALU packet lengths.\n");
       return false;
     }
 
@@ -402,7 +403,7 @@ bool RtpDepacketizerH264::ProcessStapAOrSingleNalu(
     // so remove that from this units length.
     size_t end_offset = nalu_start_offsets[i + 1] - kLengthFieldSize;
     if (end_offset - start_offset < H264::kNaluTypeSize) {
-      LOG(LS_ERROR) << "STAP-A packet too short";
+      loge("STAP-A packet too short\n");
       return false;
     }
 
@@ -428,9 +429,9 @@ bool RtpDepacketizerH264::ProcessStapAOrSingleNalu(
       switch (result) {
         case SpsVuiRewriter::ParseResult::kVuiRewritten:
           if (modified_buffer_) {
-            LOG(LS_WARNING) << "More than one H264 SPS NAL units needing "
-                               "rewriting found within a single STAP-A packet. "
-                               "Keeping the first and rewriting the last.";
+            logw("More than one H264 SPS NAL units needing "
+                 "rewriting found within a single STAP-A packet. "
+                 "Keeping the first and rewriting the last.\n");
           }
 
           // Rewrite length field to new SPS size.
@@ -491,7 +492,7 @@ bool RtpDepacketizerH264::ParseFuaNalu(
     RtpDepacketizer::ParsedPayload* parsed_payload,
     const uint8_t* payload_data) {
   if (length_ < kFuAHeaderSize) {
-    LOG(LS_ERROR) << "FU-A NAL units truncated.";
+    loge("FU-A NAL units truncated.\n");
     return false;
   }
   uint8_t fnri = payload_data[0] & (kFBit | kNriMask);

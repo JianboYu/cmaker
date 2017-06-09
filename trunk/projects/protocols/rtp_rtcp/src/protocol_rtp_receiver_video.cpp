@@ -13,7 +13,12 @@
 #include <memory>
 
 #include <os_log.h>
-#include "os_assert.h"
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPReceiverVideo"
+#endif
+
+#include <os_assert.h>
 #include "protocol_rtp_cvo.h"
 #include "protocol_rtp_payload_registry.h"
 #include "protocol_rtp_format.h"
@@ -54,7 +59,7 @@ int32_t RTPReceiverVideo::ParseRtpPacket(WebRtcRTPHeader* rtp_header,
                                          size_t payload_length,
                                          int64_t timestamp_ms,
                                          bool is_first_packet) {
-  logv("rtp Video::ParseRtp seqnum[%d] timestamp[%d]\n",
+  logv("rtp Video::ParseRtp seqnum[%u] timestamp[%u]\n",
                rtp_header->header.sequenceNumber,
                rtp_header->header.timestamp);
   rtp_header->type.Video.codec = specific_payload.Video.videoCodecType;

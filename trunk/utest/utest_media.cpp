@@ -54,7 +54,9 @@ void DumpRTPHeader(uint8_t *rtp_header) {
 
 class VerifyingRtxReceiver : public NullRtpData {
  public:
-  VerifyingRtxReceiver() {}
+  VerifyingRtxReceiver() {
+    _fp = fopen("recv_rtp.h264", "w+");
+  }
 
   int32_t OnReceivedPayloadData(
       const uint8_t* data,
@@ -82,9 +84,14 @@ class VerifyingRtxReceiver : public NullRtpData {
                 rtp_header->header.ssrc,
                 rtp_header->frameType);
     log_verbose("tag", "Recevied payload data addr: %p size: %d\n", data, size);
+    uint32_t writed = fwrite(data, 1, size, _fp);
+    fflush(_fp);
+    CHECK_EQ(writed, size);
+    log_verbose("R-RTP", "Recieve RTP stream size: %d\n", writed);
     return 0;
   }
   std::list<uint16_t> _sequence_numbers;
+  FILE *_fp;
 };
 
 class TestRtpFeedback : public NullRtpFeedback {
@@ -112,7 +119,6 @@ public:
         _rtp_payload_registry(NULL),
         _rtp_receiver(NULL),
         _rtp_sender(NULL) {
-        _fp = fopen("rtp.h264", "w");
   }
 
   virtual bool SendRtp(const uint8_t* packet,
@@ -200,7 +206,6 @@ private:
   //udp transport implement
   SocketManager *_sock_mgr;
   Socket *_rtp_sock;
-  FILE *_fp;
 };
 
 
