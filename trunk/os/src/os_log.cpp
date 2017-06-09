@@ -71,7 +71,7 @@ static void os_printf(int32_t level, const char *tag, const char *fmt, va_list a
   }
 
   fprintf(stderr, "[%s%s%s]", pcolor, tag, CONSOLE_COLOR_E);
-  fprintf(stderr, fmt, args);
+  vfprintf(stderr, fmt, args);
 }
 
 void log_trace(int32_t level, const char *tag, const char *fmt, ...) {

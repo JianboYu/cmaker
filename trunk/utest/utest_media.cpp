@@ -67,8 +67,6 @@ class VerifyingRtxReceiver : public NullRtpData {
     _sequence_numbers.push_back(rtp_header->header.sequenceNumber);
     //uint8_t numCSRCs;
     //uint32_t arrOfCSRCs[kRtpCsrcSize];
-    //size_t paddingLength;
-    //size_t headerLength;
     //int payload_type_frequency;
     log_verbose("tag", "RTP header:\n");
     log_verbose("tag", "  markebit: %d\n"
@@ -76,17 +74,22 @@ class VerifyingRtxReceiver : public NullRtpData {
                        "  seq: %u\n"
                        "  ts: %lu\n"
                        "  ssrc: %08x\n"
-                       "  frametype: %d\n",
+                       "  frametype: %d\n"
+                       "  head len: %d\n"
+                       "  pading len: %d\n",
                 rtp_header->header.markerBit,
                 rtp_header->header.payloadType,
                 rtp_header->header.sequenceNumber,
                 rtp_header->header.timestamp,
                 rtp_header->header.ssrc,
-                rtp_header->frameType);
+                rtp_header->frameType,
+                rtp_header->header.headerLength,
+                rtp_header->header.paddingLength);
     log_verbose("tag", "Recevied payload data addr: %p size: %d\n", data, size);
-    uint32_t writed = fwrite(data, 1, size, _fp);
+    uint32_t writed = fwrite(data + rtp_header->header.headerLength,
+                             1, size - rtp_header->header.headerLength, _fp);
     fflush(_fp);
-    CHECK_EQ(writed, size);
+    CHECK_EQ(writed, size - rtp_header->header.headerLength);
     log_verbose("R-RTP", "Recieve RTP stream size: %d\n", writed);
     return 0;
   }
@@ -132,6 +135,13 @@ public:
     sock_dst_addr._sockaddr_in.sin_addr = inet_addr("172.16.104.13");
 
     //DumpRTPHeader((uint8_t*)packet);
+    logw("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+          *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2),
+          *(packet + 12 + 3), *(packet + 12 + 4), *(packet + 12 + 5),
+          *(packet + 12 + 6), *(packet + 12 + 7), *(packet + 12 + 8),
+          *(packet + 12 + 9), *(packet + 12 + 10), *(packet + 12 + 11)
+    );
+
     int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
     logv("SendRTP data size: %d\n", ret);
 
@@ -242,14 +252,14 @@ OMX_ERRORTYPE sEventHandler(
   OMX_IN OMX_U32 nData1,
   OMX_IN OMX_U32 nData2,
   OMX_IN OMX_PTR pEventData) {
-    logv("EventHandler com: %p appdata: %p\n", hComponent, pAppData);
+    //logv("EventHandler com: %p appdata: %p\n", hComponent, pAppData);
     return OMX_ErrorNone;
 }
 OMX_ERRORTYPE sEmptyBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("EmptyBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    //logv("EmptyBufferDone com: %p appdata: %p\n", hComponent, pAppData);
     OMXContext *omx_ctx = (OMXContext *)pAppData;
     int32_t status = cirq_enqueue(omx_ctx->ebd, pBuffer);
     CHECK_EQ(0, status);
@@ -260,7 +270,7 @@ OMX_ERRORTYPE sFillBufferDone(
   OMX_IN OMX_HANDLETYPE hComponent,
   OMX_IN OMX_PTR pAppData,
   OMX_IN OMX_BUFFERHEADERTYPE* pBuffer) {
-    logv("FillBufferDone com: %p appdata: %p\n", hComponent, pAppData);
+    //logv("FillBufferDone com: %p appdata: %p\n", hComponent, pAppData);
     OMXContext *omx_ctx = (OMXContext *)pAppData;
     int32_t status = cirq_enqueue(omx_ctx->fbd, pBuffer);
     CHECK_EQ(0, status);
@@ -289,7 +299,7 @@ bool thread_loop(void *ctx) {
     }
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
-    logi("EmptyThisBuffer: %p\n", pBuffer);
+    //logi("EmptyThisBuffer: %p\n", pBuffer);
     omx_ctx->ts += 33*1000;
   }
 
@@ -299,13 +309,21 @@ bool thread_loop(void *ctx) {
   if (pBuffer) {
     if (pBuffer->nFilledLen > 0) {
       RTPFragmentationHeader fragment;
-      fragment.VerifyAndAllocateFragmentationHeader(1);
-      fragment.fragmentationLength[0] = pBuffer->nFilledLen;
-      fragment.fragmentationOffset[0] = 0;
-      fragment.fragmentationTimeDiff[0] = 0;
-      fragment.fragmentationPlType[0] = 0;
+      if (pBuffer->nFilledLen == 24) {
+        fragment.VerifyAndAllocateFragmentationHeader(2);
+        fragment.fragmentationOffset[0] = 4;
+        fragment.fragmentationLength[0] = 10;
+        fragment.fragmentationOffset[1] = 18;
+        fragment.fragmentationLength[1] = 6;
+      } else {
+        fragment.VerifyAndAllocateFragmentationHeader(1);
+        fragment.fragmentationOffset[0] = 4;
+        fragment.fragmentationLength[0] = pBuffer->nFilledLen - 4;
+        fragment.fragmentationTimeDiff[0] = 0;
+        fragment.fragmentationPlType[0] = 0;
+      }
 
-      logi("SendOutgoingData: %p size: %d ts: %lld\n",
+      logw("SendOutgoingData: %p size: %lu ts: %llu\n",
             pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
       uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
       CHECK_EQ(writed, pBuffer->nFilledLen);
@@ -314,7 +332,7 @@ bool thread_loop(void *ctx) {
       fflush(omx_ctx->fp_encoded);
       fflush(omx_ctx->fp_len);
 
-      logi("Buffer flags: %08x\n", pBuffer->nFlags);
+      //logi("Buffer flags: %08x\n", pBuffer->nFlags);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
                         kVideoFrameKey : kVideoFrameDelta,
@@ -328,7 +346,7 @@ bool thread_loop(void *ctx) {
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
-    logi("FillThisBuffer: %p\n", pBuffer);
+    //logi("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
   os_msleep(50);
@@ -339,17 +357,17 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
     logv("-----------------Port Define---------------\n");
     logv("Index: %d\n", def->nPortIndex);
     logv("Dir: %s\n", def->eDir == OMX_DirInput ? "DirInput" : "DirOuput");
-    logv("BufMinCount: %d\n", def->nBufferCountMin);
-    logv("BufActCount: %d\n", def->nBufferCountActual);
+    logv("BufMinCount: %u\n", def->nBufferCountMin);
+    logv("BufActCount: %u\n", def->nBufferCountActual);
     logv("Domain: %s\n", def->eDomain == OMX_PortDomainVideo ? "Video" : "Audio");
     if (def->eDomain == OMX_PortDomainVideo) {
-      logv("Width: %d\n", def->format.video.nFrameWidth);
-      logv("Height: %d\n", def->format.video.nFrameHeight);
-      logv("Stride: %d\n", def->format.video.nStride);
-      logv("SliceH: %d\n", def->format.video.nSliceHeight);
-      logv("Bitrate: %d\n", def->format.video.nBitrate);
+      logv("Width: %u\n", def->format.video.nFrameWidth);
+      logv("Height: %u\n", def->format.video.nFrameHeight);
+      logv("Stride: %u\n", def->format.video.nStride);
+      logv("SliceH: %u\n", def->format.video.nSliceHeight);
+      logv("Bitrate: %u\n", def->format.video.nBitrate);
       logv("Framerate: %d\n", def->format.video.xFramerate >> 16);
-      logv("BufAlign: %d\n", def->nBufferAlignment);
+      logv("BufAlign: %u\n", def->nBufferAlignment);
       logv("CompressFmt: %x\n", def->format.video.eCompressionFormat);
       logv("ColorFmt: %x\n", def->format.video.eColorFormat);
     }
