@@ -13,6 +13,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <os_log.h>
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPRecevie"
+#endif
+
+
 #include "protocol_clock.h"
 #include "protocol_rtp_rtcp_defines.h"
 #include "protocol_rtp_payload_registry.h"
@@ -99,8 +106,7 @@ int32_t RtpReceiverImpl::RegisterReceivePayload(
   if (created_new_payload) {
     if (rtp_media_receiver_->OnNewPayloadTypeCreated(payload_name, payload_type,
                                                      frequency) != 0) {
-      LOG(LS_ERROR) << "Failed to register payload: " << payload_name << "/"
-                    << static_cast<int>(payload_type);
+      loge("Failed to register payload: %s/%d\n", payload_name, static_cast<int>(payload_type));
       return -1;
     }
   }
@@ -153,7 +159,7 @@ bool RtpReceiverImpl::IncomingRtpPacket(
       // OK, keep-alive packet.
       return true;
     }
-    LOG(LS_WARNING) << "Receiving invalid payload type.";
+    logw("Receiving invalid payload type.\n");
     return false;
   }
 
@@ -282,8 +288,7 @@ void RtpReceiverImpl::CheckSSRCChanged(const RTPHeader& rtp_header) {
             rtp_header.payloadType, payload_name,
             rtp_header.payload_type_frequency, channels, rate)) {
       // New stream, same codec.
-      LOG(LS_ERROR) << "Failed to create decoder for payload type: "
-                    << static_cast<int>(rtp_header.payloadType);
+      loge("Failed to create decoder for payload type: %d\n", static_cast<int>(rtp_header.payloadType));
     }
   }
 }

@@ -98,7 +98,7 @@ void SoftAACEncoder::initPorts() {
 
 int32_t SoftAACEncoder::initEncoder() {
     if (AACENC_OK != aacEncOpen(&mAACEncoder, 0, 0)) {
-        loge("Failed to init AAC encoder");
+        loge("Failed to init AAC encoder\n");
         return UNKNOWN_ERROR;
     }
     return 0;
@@ -167,7 +167,7 @@ OMX_ERRORTYPE SoftAACEncoder::internalGetParameter(
                     aacParams->nAACtools |= OMX_AUDIO_AACToolAndroidDSBR;
                     break;
                 default:
-                    loge("invalid SBR ratio %d", mSBRRatio);
+                    loge("invalid SBR ratio %d\n", mSBRRatio);
                     CHECK(!"TRESPASS");
                 }
                 break;
@@ -177,7 +177,7 @@ OMX_ERRORTYPE SoftAACEncoder::internalGetParameter(
                 aacParams->nAACtools &= ~OMX_AUDIO_AACToolAndroidDSBR;
                 break;
             default:
-                loge("invalid SBR mode %d", mSBRMode);
+                loge("invalid SBR mode %d\n", mSBRMode);
                 CHECK(!"TRESPASS");
             }
             return OMX_ErrorNone;
@@ -340,7 +340,7 @@ static AUDIO_OBJECT_TYPE getAOTFromProfile(OMX_U32 profile) {
     } else if (profile == OMX_AUDIO_AACObjectELD) {
         return AOT_ER_AAC_ELD;
     } else {
-        logw("Unsupported AAC profile - defaulting to AAC-LC");
+        logw("Unsupported AAC profile - defaulting to AAC-LC\n");
         return AOT_AAC_LC;
     }
 }
@@ -349,36 +349,36 @@ int32_t SoftAACEncoder::setAudioParams() {
     // We call this whenever sample rate, number of channels, bitrate or SBR mode change
     // in reponse to setParameter calls.
 
-    logv("setAudioParams: %u Hz, %u channels, %u bps, %i sbr mode, %i sbr ratio",
+    logv("setAudioParams: %u Hz, %u channels, %u bps, %i sbr mode, %i sbr ratio\n",
          mSampleRate, mNumChannels, mBitRate, mSBRMode, mSBRRatio);
 
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_AOT,
             getAOTFromProfile(mAACProfile))) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
 
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_SAMPLERATE, mSampleRate)) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_BITRATE, mBitRate)) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_CHANNELMODE,
             getChannelMode(mNumChannels))) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_TRANSMUX, TT_MP4_RAW)) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
 
     if (mSBRMode != -1 && mAACProfile == OMX_AUDIO_AACObjectELD) {
         if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_SBR_MODE, mSBRMode)) {
-            loge("Failed to set AAC encoder parameters");
+            loge("Failed to set AAC encoder parameters\n");
             return UNKNOWN_ERROR;
         }
     }
@@ -390,7 +390,7 @@ int32_t SoftAACEncoder::setAudioParams() {
        2: Dualrate SBR (default for HE-AAC)
      */
     if (AACENC_OK != aacEncoder_SetParam(mAACEncoder, AACENC_SBR_RATIO, mSBRRatio)) {
-        loge("Failed to set AAC encoder parameters");
+        loge("Failed to set AAC encoder parameters\n");
         return UNKNOWN_ERROR;
     }
 
@@ -415,7 +415,7 @@ void SoftAACEncoder::onQueueFilled(OMX_U32 /* portIndex */) {
         }
 
         if (AACENC_OK != aacEncEncode(mAACEncoder, NULL, NULL, NULL, NULL)) {
-            loge("Unable to initialize encoder for profile / sample-rate / bit-rate / channels");
+            loge("Unable to initialize encoder for profile / sample-rate / bit-rate / channels\n");
             notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
             mSignalledError = true;
             return;
@@ -423,12 +423,12 @@ void SoftAACEncoder::onQueueFilled(OMX_U32 /* portIndex */) {
 
         OMX_U32 actualBitRate  = aacEncoder_GetParam(mAACEncoder, AACENC_BITRATE);
         if (mBitRate != actualBitRate) {
-            logw("Requested bitrate %u unsupported, using %u", mBitRate, actualBitRate);
+            logw("Requested bitrate %u unsupported, using %u\n", mBitRate, actualBitRate);
         }
 
         AACENC_InfoStruct encInfo;
         if (AACENC_OK != aacEncInfo(mAACEncoder, &encInfo)) {
-            loge("Failed to get AAC encoder info");
+            loge("Failed to get AAC encoder info\n");
             notify(OMX_EventError, OMX_ErrorUndefined, 0, NULL);
             mSignalledError = true;
             return;
@@ -610,10 +610,9 @@ void SoftAACEncoder::onQueueFilled(OMX_U32 /* portIndex */) {
 
         outHeader->nTimeStamp = mInputTimeUs;
 
-#if 0
-        logi("sending %d bytes of data (time = %lld us, flags = 0x%08lx)",
+        logi("sending %d bytes of data (time = %lld us, flags = 0x%08lx)\n",
               nOutputBytes, mInputTimeUs, outHeader->nFlags);
-
+#if 0
         hexdump(outHeader->pBuffer + outHeader->nOffset, outHeader->nFilledLen);
 #endif
 

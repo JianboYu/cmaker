@@ -132,15 +132,15 @@ public:
     socket_addr sock_dst_addr;
     sock_dst_addr._sockaddr_in.sin_family = AF_INET;
     sock_dst_addr._sockaddr_in.sin_port = htons(25050);
-    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("172.16.104.13");
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.100");
 
     //DumpRTPHeader((uint8_t*)packet);
-    logw("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-          *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2),
-          *(packet + 12 + 3), *(packet + 12 + 4), *(packet + 12 + 5),
-          *(packet + 12 + 6), *(packet + 12 + 7), *(packet + 12 + 8),
-          *(packet + 12 + 9), *(packet + 12 + 10), *(packet + 12 + 11)
-    );
+    //logi("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+    //      *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2),
+    //      *(packet + 12 + 3), *(packet + 12 + 4), *(packet + 12 + 5),
+    //      *(packet + 12 + 6), *(packet + 12 + 7), *(packet + 12 + 8),
+    //      *(packet + 12 + 9), *(packet + 12 + 10), *(packet + 12 + 11)
+    //);
 
     int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
     logv("SendRTP data size: %d\n", ret);
@@ -165,7 +165,7 @@ public:
     socket_addr sock_addr;
     sock_addr._sockaddr_in.sin_family = AF_INET;
     sock_addr._sockaddr_in.sin_port = htons(15050);
-    sock_addr._sockaddr_in.sin_addr = inet_addr("172.16.1.88");
+    sock_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.103");
 
     CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
     CHECK_EQ(true, _rtp_sock->StartReceiving());
@@ -243,6 +243,8 @@ typedef struct OMXContext {
   FILE *fp_encoded;
   FILE *fp_len;
   RTPSender *rtp_sender;
+  uint8_t *csd;
+  uint32_t csd_size;
 }OMXContext;
 
 OMX_ERRORTYPE sEventHandler(
@@ -308,48 +310,63 @@ bool thread_loop(void *ctx) {
   pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     if (pBuffer->nFilledLen > 0) {
+
       RTPFragmentationHeader fragment;
-      if (pBuffer->nFilledLen == 24) {
-        fragment.VerifyAndAllocateFragmentationHeader(2);
-        fragment.fragmentationOffset[0] = 4;
-        fragment.fragmentationLength[0] = 10;
-        fragment.fragmentationOffset[1] = 18;
-        fragment.fragmentationLength[1] = 6;
+      if (pBuffer->nFlags == OMX_BUFFERFLAG_CODECCONFIG) {
+        memcpy(omx_ctx->csd, pBuffer->pBuffer+ pBuffer->nOffset, pBuffer->nFilledLen);
+        omx_ctx->csd_size = pBuffer->nFilledLen;
       } else {
+
+        loge("Flags: %08x csd_size: %08x buffer offset: %08x\n", pBuffer->nFlags, omx_ctx->csd_size, pBuffer->nOffset);
+        if (pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME) {
+          if (omx_ctx->csd_size <= pBuffer->nOffset) {
+            loge("Add csd header for SYNCFrame size:%d\n", omx_ctx->csd_size);
+            pBuffer->nOffset -=  omx_ctx->csd_size;
+            pBuffer->nFilledLen += omx_ctx->csd_size;
+            memcpy(pBuffer->pBuffer + pBuffer->nOffset, omx_ctx->csd, omx_ctx->csd_size);
+          }
+        }
+
         fragment.VerifyAndAllocateFragmentationHeader(1);
         fragment.fragmentationOffset[0] = 4;
         fragment.fragmentationLength[0] = pBuffer->nFilledLen - 4;
         fragment.fragmentationTimeDiff[0] = 0;
         fragment.fragmentationPlType[0] = 0;
+
+        logw("pBuffer: %p nFilledLen: %u nSize: %u nOffset: %u\n",
+            pBuffer, pBuffer->nFilledLen, pBuffer->nAllocLen, pBuffer->nOffset);
+        logw("SendOutgoingData: %p size: %lu ts: %llu\n",
+              pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
+        //logi("Buffer flags: %08x\n", pBuffer->nFlags);
+        int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
+                       pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
+                          kVideoFrameDelta: kVideoFrameDelta,
+                       kPayloadType, (pBuffer->nTimeStamp / 1000)*90,
+                       pBuffer->nTimeStamp / 1000, pBuffer->pBuffer + pBuffer->nOffset,
+                       pBuffer->nFilledLen, &fragment, NULL);
+        CHECK_EQ(0, ret);
+        #if 1
+        //Save raw encoded stream
+        uint32_t writed = fwrite(pBuffer->pBuffer + pBuffer->nOffset, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
+        CHECK_EQ(writed, pBuffer->nFilledLen);
+        writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
+        CHECK_GT(writed, (uint32_t)0);
+        fflush(omx_ctx->fp_encoded);
+        fflush(omx_ctx->fp_len);
+        #endif
       }
-
-      logw("SendOutgoingData: %p size: %lu ts: %llu\n",
-            pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
-      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
-      CHECK_EQ(writed, pBuffer->nFilledLen);
-      writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
-      CHECK_GT(writed, (uint32_t)0);
-      fflush(omx_ctx->fp_encoded);
-      fflush(omx_ctx->fp_len);
-
-      //logi("Buffer flags: %08x\n", pBuffer->nFlags);
-      int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
-                     pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
-                        kVideoFrameKey : kVideoFrameDelta,
-                     kPayloadType, (pBuffer->nTimeStamp / 1000)*90,
-                     pBuffer->nTimeStamp / 1000, pBuffer->pBuffer,
-                     pBuffer->nFilledLen, &fragment, NULL);
-      CHECK_EQ(0, ret);
     }
+
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 0;
-    pBuffer->nOffset = 0;
+    pBuffer->nOffset = 24;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
     //logi("FillThisBuffer: %p\n", pBuffer);
+
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(50);
+  os_msleep(33);
   return true;
 }
 
@@ -389,6 +406,9 @@ int32_t main(int argc, char *argv[]) {
   }
   OMXContext *omx_ctx = (OMXContext*)malloc(sizeof(OMXContext));
   CHECK(omx_ctx);
+  omx_ctx->csd = (uint8_t*)malloc(64);
+  omx_ctx->csd_size = 0;
+
   int32_t status = -1;
   int32_t input_buffer_num = 2;
   int32_t output_buffer_num = 2;
@@ -440,7 +460,7 @@ int32_t main(int argc, char *argv[]) {
   def.format.video.nFrameHeight = 720;
   def.format.video.nStride = def.format.video.nFrameWidth;
   def.format.video.nSliceHeight = def.format.video.nFrameHeight;
-  def.format.video.nBitrate = 1000;
+  def.format.video.nBitrate = 500;
   def.format.video.xFramerate = 0;
   def.format.video.eCompressionFormat = OMX_VIDEO_CodingAVC;
   def.format.video.eColorFormat = OMX_COLOR_FormatUnused;
@@ -581,6 +601,7 @@ int32_t main(int argc, char *argv[]) {
   fclose(omx_ctx->fp);
   fclose(omx_ctx->fp_encoded);
 
+  free(omx_ctx->csd);
   free(omx_ctx);
   return 0;
 }

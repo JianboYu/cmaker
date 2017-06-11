@@ -1170,9 +1170,9 @@ OMX_ERRORTYPE SoftAVC::setEncodeArgs(
     UWORD8 *pu1_buf;
 
     ps_inp_raw_buf = &((ive_video_encode_ip_t*)ps_encode_ip)->s_inp_buf;
-    ((ive_video_encode_ip_t*)ps_encode_ip)->s_out_buf.pv_buf = outputBufferHeader->pBuffer;
+    ((ive_video_encode_ip_t*)ps_encode_ip)->s_out_buf.pv_buf = outputBufferHeader->pBuffer + outputBufferHeader->nOffset;
     ((ive_video_encode_ip_t*)ps_encode_ip)->s_out_buf.u4_bytes = 0;
-    ((ive_video_encode_ip_t*)ps_encode_ip)->s_out_buf.u4_bufsize = outputBufferHeader->nAllocLen;
+    ((ive_video_encode_ip_t*)ps_encode_ip)->s_out_buf.u4_bufsize = outputBufferHeader->nAllocLen - outputBufferHeader->nOffset;
     ((ive_video_encode_ip_t*)ps_encode_ip)->u4_size = sizeof(ive_video_encode_ip_t);
     ((ive_video_encode_op_t*)ps_encode_op)->u4_size = sizeof(ive_video_encode_op_t);
 
@@ -1303,9 +1303,8 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
 
         outputBufferHeader->nTimeStamp = 0;
         outputBufferHeader->nFlags = 0;
-        outputBufferHeader->nOffset = 0;
+        //outputBufferHeader->nOffset = 0;
         outputBufferHeader->nFilledLen = 0;
-        outputBufferHeader->nOffset = 0;
 
         if (inputBufferHeader != NULL) {
             outputBufferHeader->nFlags = inputBufferHeader->nFlags;
@@ -1340,7 +1339,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
             outputBufferInfo->mOwnedByUs = false;
 
             EDUMP_TO_FILE(
-                    mOutFile, outputBufferHeader->pBuffer,
+                    mOutFile, outputBufferHeader->pBuffer + outputBufferHeader->nOffset,
                     outputBufferHeader->nFilledLen);
             notifyFillBufferDone(outputBufferHeader);
 
@@ -1449,7 +1448,7 @@ void SoftAVC::onQueueFilled(OMX_U32 portIndex) {
             outputBufferHeader->nTimeStamp |= s_encode_op.u4_timestamp_low;
             outputBufferInfo->mOwnedByUs = false;
             outQueue.erase(outQueue.begin());
-            EDUMP_TO_FILE(mOutFile, outputBufferHeader->pBuffer,
+            EDUMP_TO_FILE(mOutFile, outputBufferHeader->pBuffer + outputBufferHeader->nOffset,
                     outputBufferHeader->nFilledLen);
             notifyFillBufferDone(outputBufferHeader);
         }

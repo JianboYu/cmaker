@@ -191,6 +191,7 @@ void SocketPosixImpl::HasIncoming() {
       // The peer has performed an orderly shutdown.
       break;
     case SOCKET_ERROR:
+      loge("Socket error\n");
       break;
     default:
       if (_wantsIncoming && _incomingCb)

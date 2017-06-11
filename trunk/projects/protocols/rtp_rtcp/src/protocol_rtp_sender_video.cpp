@@ -104,8 +104,10 @@ void RTPSenderVideo::SendVideoPacket(uint8_t* data_buffer,
     AutoLock cs(stats_crit_.get());
     video_bitrate_.Update(payload_length + rtp_header_length,
                           clock_->TimeInMilliseconds());
-    logv("Video::PacketNormal timestamp[%u] seqnum[%u]\n",
-          capture_timestamp, seq_num);
+    logv("RTP Sender To network timestamp[%u] seqnum[%u]"
+         " payload len[%d] rtp_header_len[%d] capture_timestamp[%u] capture_ms[%lld]\n",
+          capture_timestamp, seq_num, payload_length, rtp_header_length,
+          capture_timestamp, capture_time_ms);
   } else {
     logw("Failed to send video packet seqnum[%u] \n", seq_num);
   }
@@ -337,7 +339,7 @@ int32_t RTPSenderVideo::SendVideo(const RtpVideoCodecTypes videoType,
     first = false;
   }
 
-  log_verbose("Video", "CaptureTime[%d] rtp ts[%d]\n", capture_time_ms,
+  logw("----------------Video captureTime[%d] RTP timestamp[%d]\n", capture_time_ms,
               _rtpSender.Timestamp());
   return 0;
 }

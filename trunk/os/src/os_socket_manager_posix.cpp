@@ -55,7 +55,7 @@ SocketManagerPosix::~SocketManagerPosix()
 
 bool SocketManagerPosix::Start()
 {
-  logi("SocketManagerPosix(%d)::Start()",_numberOfSocketMgr);
+  logi("SocketManagerPosix(%d)::Start()\n",_numberOfSocketMgr);
 
   _critSect->lock();
   bool retVal = true;
@@ -81,7 +81,7 @@ bool SocketManagerPosix::Stop()
   }
   if(!retVal) {
     loge("SocketManagerPosix(%d)::Stop() there are still active socket "
-        "managers",
+        "managers\n",
         _numberOfSocketMgr);
   }
   _critSect->unlock();
@@ -131,7 +131,7 @@ bool SocketManagerPosix::RemoveSocket(Socket* s) {
   }
   if(!retVal) {
     loge("SocketManagerPosix(%d)::RemoveSocket() failed to remove socket\
-        from manager", _numberOfSocketMgr);
+        from manager\n", _numberOfSocketMgr);
   }
   _critSect->unlock();
   return retVal;
@@ -176,7 +176,7 @@ bool SocketManagerPosixImpl::Start()
 
 bool SocketManagerPosixImpl::Stop()
 {
-  logi("Stop SocketManagerPosix");
+  logi("Stop SocketManagerPosix\n");
   _thread->stop();
   return true;
 }
