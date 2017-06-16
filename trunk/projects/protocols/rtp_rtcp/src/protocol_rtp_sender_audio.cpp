@@ -347,15 +347,15 @@ int32_t RTPSenderAudio::SendAudio(FrameType frameType,
   _rtpSender->UpdateAudioLevel(dataBuffer, packetSize, rtp_header,
                                (frameType == kAudioFrameSpeech),
                                audio_level_dbov);
-  /*TRACE_EVENT_ASYNC_END2("webrtc", "Audio", captureTimeStamp, "timestamp",
-                         _rtpSender->Timestamp(), "seqnum",
-                         _rtpSender->SequenceNumber());*/
+  logv("Audio capture ts[%d] timestamp[%d] seqnum[%d]\n", captureTimeStamp,
+                         _rtpSender->Timestamp(),
+                         _rtpSender->SequenceNumber());
   int32_t send_result = _rtpSender->SendToNetwork(
       dataBuffer, payloadSize, rtpHeaderLength,
       TimeMillis(), kAllowRetransmission,
       RtpPacketSender::kHighPriority);
   if (first_packet_sent_()) {
-    LOG(LS_INFO) << "First audio RTP packet sent to pacer";
+    logi("First audio RTP packet sent to pacer\n");
   }
   return send_result;
 }
@@ -447,9 +447,8 @@ int32_t RTPSenderAudio::SendTelephoneEventPacket(bool ended,
     dtmfbuffer[13] = E | R | volume;
     ByteWriter<uint16_t>::WriteBigEndian(dtmfbuffer + 14, duration);
 
-    /*TRACE_EVENT_INSTANT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"),
-                         "Audio::SendTelephoneEvent", "timestamp",
-                         dtmfTimeStamp, "seqnum", _rtpSender->SequenceNumber());*/
+    logv("Audio::SendTelephoneEvent timestamp[%d] seqnum[%d]\n",
+          dtmfTimeStamp, _rtpSender->SequenceNumber());
     retVal = _rtpSender->SendToNetwork(
         dtmfbuffer, 4, 12, TimeMillis(),
         kAllowRetransmission, RtpPacketSender::kHighPriority);

@@ -12,6 +12,7 @@
 #include <math.h>   // pow()
 #include <string.h>  // memcpy()
 
+#include <os_log.h>
 #include "protocol_rtp_receiver_audio.h"
 
 namespace protocol {
@@ -178,9 +179,8 @@ int32_t RTPReceiverAudio::ParseRtpPacket(WebRtcRTPHeader* rtp_header,
                                          size_t payload_length,
                                          int64_t timestamp_ms,
                                          bool is_first_packet) {
-  /*TRACE_EVENT2(TRACE_DISABLED_BY_DEFAULT("webrtc_rtp"), "Audio::ParseRtp",
-               "seqnum", rtp_header->header.sequenceNumber, "timestamp",
-               rtp_header->header.timestamp);*/
+  logv("Audio::ParseRtp seqnum[%d] timestamp[%d]\n",
+        rtp_header->header.sequenceNumber, rtp_header->header.timestamp);
   rtp_header->type.Audio.numEnergy = rtp_header->header.numCSRCs;
   num_energy_ = rtp_header->type.Audio.numEnergy;
   if (rtp_header->type.Audio.numEnergy > 0 &&
@@ -191,7 +191,7 @@ int32_t RTPReceiverAudio::ParseRtpPacket(WebRtcRTPHeader* rtp_header,
   }
 
   if (first_packet_received_()) {
-    LOG(LS_INFO) << "Received first audio RTP packet";
+    logi("Received first audio RTP packet\n");
   }
 
   return ParseAudioCodecSpecific(rtp_header,
@@ -265,8 +265,8 @@ int32_t RTPReceiverAudio::InvokeOnInitializeDecoder(
       callback->OnInitializeDecoder(
           payload_type, payload_name, specific_payload.Audio.frequency,
           specific_payload.Audio.channels, specific_payload.Audio.rate)) {
-    LOG(LS_ERROR) << "Failed to create decoder for payload type: "
-                  << payload_name << "/" << static_cast<int>(payload_type);
+      loge("Failed to create decoder for payload type[%s/%d]\n", \
+            payload_name, static_cast<int>(payload_type));
     return -1;
   }
   return 0;

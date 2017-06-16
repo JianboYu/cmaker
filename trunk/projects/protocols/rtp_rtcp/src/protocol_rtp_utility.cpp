@@ -10,6 +10,7 @@
 
 #include <string.h>
 
+#include <os_log.h>
 #include "protocol_byte_io.h"
 #include "protocol_rtp_utility.h"
 
@@ -194,6 +195,7 @@ bool RtpHeaderParser::Parse(RTPHeader* header,
   const uint16_t sequenceNumber = (_ptrRTPDataBegin[2] << 8) +
       _ptrRTPDataBegin[3];
 
+  loge("sequenceNumber: %d\n", sequenceNumber);
   const uint8_t* ptr = &_ptrRTPDataBegin[4];
 
   uint32_t RTPTimestamp = ByteReader<uint32_t>::ReadBigEndian(ptr);
@@ -316,28 +318,25 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
     ptr++;
 
     if (id == 15) {
-      LOG(LS_WARNING)
-          << "RTP extension header 15 encountered. Terminate parsing.";
+      logw("RTP extension header 15 encountered. Terminate parsing.\n");
       return;
     }
 
     if (ptrRTPDataExtensionEnd - ptr < (len + 1)) {
-      LOG(LS_WARNING) << "Incorrect one-byte extension len: " << (len + 1)
-                      << ", bytes left in buffer: "
-                      << (ptrRTPDataExtensionEnd - ptr);
+      logw("Incorrect one-byte extension len: %d, bytes left in buffer: %d\n",
+            (len + 1), (ptrRTPDataExtensionEnd - ptr));
       return;
     }
 
     RTPExtensionType type;
     if (ptrExtensionMap->GetType(id, &type) != 0) {
       // If we encounter an unknown extension, just skip over it.
-      LOG(LS_WARNING) << "Failed to find extension id: " << id;
+      logw("Failed to find extension id: %d\n",id);
     } else {
       switch (type) {
         case kRtpExtensionTransmissionTimeOffset: {
           if (len != 2) {
-            LOG(LS_WARNING) << "Incorrect transmission time offset len: "
-                            << len;
+            logw("Incorrect transmission time offset len: %d\n", len);
             return;
           }
           //  0                   1                   2                   3
@@ -353,7 +352,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
         }
         case kRtpExtensionAudioLevel: {
           if (len != 0) {
-            LOG(LS_WARNING) << "Incorrect audio level len: " << len;
+            logw("Incorrect audio level len: %d\n", len);
             return;
           }
           //  0                   1
@@ -369,7 +368,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
         }
         case kRtpExtensionAbsoluteSendTime: {
           if (len != 2) {
-            LOG(LS_WARNING) << "Incorrect absolute send time len: " << len;
+            logw("Incorrect absolute send time len: %d\n",len);
             return;
           }
           //  0                   1                   2                   3
@@ -385,8 +384,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
         }
         case kRtpExtensionVideoRotation: {
           if (len != 0) {
-            LOG(LS_WARNING)
-                << "Incorrect coordination of video coordination len: " << len;
+            logw("Incorrect coordination of video coordination len: %d\n", len);
             return;
           }
           //  0                   1
@@ -400,8 +398,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
         }
         case kRtpExtensionTransportSequenceNumber: {
           if (len != 1) {
-            LOG(LS_WARNING) << "Incorrect transport sequence number len: "
-                            << len;
+            logw("Incorrect transport sequence number len: %d\n", len);
             return;
           }
           //   0                   1                   2
@@ -418,7 +415,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
         }
         case kRtpExtensionPlayoutDelay: {
           if (len != 2) {
-            LOG(LS_WARNING) << "Incorrect playout delay len: " << len;
+            logw("Incorrect playout delay len: %d\n", len);
             return;
           }
           //   0                   1                   2                   3
@@ -436,7 +433,7 @@ void RtpHeaderParser::ParseOneByteExtensionHeader(
           break;
         }
         default: {
-          LOG(LS_WARNING) << "Extension type not implemented: " << type;
+          logw("Extension type not implemented: %d\n", type);
           return;
         }
       }

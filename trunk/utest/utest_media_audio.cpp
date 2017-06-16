@@ -55,7 +55,7 @@ void DumpRTPHeader(uint8_t *rtp_header) {
 class VerifyingRtxReceiver : public NullRtpData {
  public:
   VerifyingRtxReceiver() {
-    _fp = fopen("recv_rtp.h264", "w+");
+    _fp = fopen("recv_rtp.aac", "w+");
   }
 
   int32_t OnReceivedPayloadData(
@@ -135,12 +135,7 @@ public:
     sock_dst_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.100");
 
     //DumpRTPHeader((uint8_t*)packet);
-    //logi("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-    //      *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2),
-    //      *(packet + 12 + 3), *(packet + 12 + 4), *(packet + 12 + 5),
-    //      *(packet + 12 + 6), *(packet + 12 + 7), *(packet + 12 + 8),
-    //      *(packet + 12 + 9), *(packet + 12 + 10), *(packet + 12 + 11)
-    //);
+    logi("%02x %02x %02x\n", *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2));
 
     int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
     logv("SendRTP data size: %d\n", ret);
@@ -279,6 +274,83 @@ OMX_ERRORTYPE sFillBufferDone(
     return OMX_ErrorNone;
 }
 
+/*
+ * ADTS (Audio data transport stream) header structure.
+ * It consists of 7 or 9 bytes (with or without CRC):
+ * 12 bits of syncword 0xFFF, all bits must be 1
+ * 1 bit of field ID. 0 for MPEG-4, and 1 for MPEG-2
+ * 2 bits of MPEG layer. If in MPEG-TS, set to 0
+ * 1 bit of protection absense. Set to 1 if no CRC.
+ * 2 bits of profile code. Set to 1 (The MPEG-4 Audio
+ *   object type minus 1. We are using AAC-LC = 2)
+ * 4 bits of sampling frequency index code (15 is not allowed)
+ * 1 bit of private stream. Set to 0.
+ * 3 bits of channel configuration code. 0 resevered for inband PCM
+ * 1 bit of originality. Set to 0.
+ * 1 bit of home. Set to 0.
+ * 1 bit of copyrighted steam. Set to 0.
+ * 1 bit of copyright start. Set to 0.
+ * 13 bits of frame length. It included 7 ot 9 bytes header length.
+ *   it is set to (protection absense? 7: 9) + size(AAC frame)
+ * 11 bits of buffer fullness. 0x7FF for VBR.
+ * 2 bits of frames count in one packet. Set to 0.
+ */
+int32_t aac_add_adts_header(uint32_t frame_len, uint8_t *dst) {
+    uint8_t *dst_cur = dst;
+    uint8_t data = 0xFF;
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    const uint8_t kFieldId = 0;
+    const uint8_t kMpegLayer = 0;
+    const uint8_t kProtectionAbsense = 1;  // 1: kAdtsHeaderLength = 7
+    data = 0xF0;
+    data |= (kFieldId << 3);
+    data |= (kMpegLayer << 1);
+    data |= kProtectionAbsense;
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    const uint8_t kProfileCode = OMX_AUDIO_AACObjectLC - 1;
+    uint8_t kSampleFreqIndex = 5;/*32kHZ*/
+    const uint8_t kPrivateStream = 0;
+    const uint8_t kChannelConfigCode = 1/*1: mono 2: stero*/;
+    data = (kProfileCode << 6);
+    data |= (kSampleFreqIndex << 2);
+    data |= (kPrivateStream << 1);
+    data |= (kChannelConfigCode >> 2);
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    // 4 bits from originality to copyright start
+    const uint8_t kCopyright = 0;
+    const uint32_t kFrameLength = frame_len;
+    data = ((kChannelConfigCode & 3) << 6);
+    data |= (kCopyright << 2);
+    data |= ((kFrameLength & 0x1800) >> 11);
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    data = ((kFrameLength & 0x07F8) >> 3);
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    const uint32_t kBufferFullness = 0x7FF;  // VBR
+    data = ((kFrameLength & 0x07) << 5);
+    data |= ((kBufferFullness & 0x07C0) >> 6);
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    const uint8_t kFrameCount = 0;
+    data = ((kBufferFullness & 0x03F) << 2);
+    data |= kFrameCount;
+    memcpy(dst_cur, &data, 1);
+    dst_cur++;
+
+    return 0;
+}
+
+
 bool audio_encoder_loop(void *ctx) {
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   OMXContext *omx_ctx = (OMXContext *)ctx;
@@ -289,7 +361,7 @@ bool audio_encoder_loop(void *ctx) {
   OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 1024 * sizeof(int16_t) * 2;
+    pBuffer->nFilledLen = 320 * sizeof(int16_t) * 1;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = omx_ctx->ts * 1000;
 
@@ -303,14 +375,29 @@ bool audio_encoder_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logv("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 1024/32;
+    omx_ctx->ts += 10;
   }
 
   pdata = NULL;
   cirq_dequeue(omx_ctx->fbd, &pdata);
   pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer ) {
-    if (pBuffer->nFilledLen > 0) {
+    if (pBuffer->nFilledLen > 0 && pBuffer->nFlags == OMX_BUFFERFLAG_CODECCONFIG) {
+      loge("CSD: %02x %02x\n", *(pBuffer->pBuffer + pBuffer->nOffset),
+            *(pBuffer->pBuffer + pBuffer->nOffset + 1));
+    }
+    bool isCsd = pBuffer->nFlags == OMX_BUFFERFLAG_CODECCONFIG;
+    if (pBuffer->nFilledLen > 0 && !isCsd) {
+      #if 1
+      uint32_t frame_len = 7 + pBuffer->nFilledLen;
+      if (pBuffer->nOffset >= 7) {
+        pBuffer->nOffset -= 7;
+        pBuffer->nFilledLen += 7;
+        aac_add_adts_header(frame_len, pBuffer->pBuffer + pBuffer->nOffset);
+      }
+      #endif
+
+      logw("Buffer flag: %08x\n", pBuffer->nFlags);
       uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
       CHECK_EQ(writed, pBuffer->nFilledLen);
       writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
@@ -318,34 +405,40 @@ bool audio_encoder_loop(void *ctx) {
       fflush(omx_ctx->fp_encoded);
       fflush(omx_ctx->fp_len);
 
+      pBuffer->nOffset -= 2;
+      pBuffer->nFilledLen += 2;
+      int16_t adts_size = pBuffer->nFilledLen + 4;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 0) = 0x00;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 1) = 0x10;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 2) = (adts_size & 0x1fe0) >> 5;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 3) = (adts_size & 0x1f) << 3;
       //Send to network
-
-      RTPFragmentationHeader fragment;
-      fragment.VerifyAndAllocateFragmentationHeader(1);
-      fragment.fragmentationOffset[0] = 0;
-      fragment.fragmentationLength[0] = pBuffer->nFilledLen;
-      fragment.fragmentationTimeDiff[0] = 0;
-      fragment.fragmentationPlType[0] = 0;
+      //RTPFragmentationHeader fragment;
+      //fragment.VerifyAndAllocateFragmentationHeader(1);
+      //fragment.fragmentationOffset[0] = 0;
+      //fragment.fragmentationLength[0] = pBuffer->nFilledLen;
+      //fragment.fragmentationTimeDiff[0] = 0;
+      //fragment.fragmentationPlType[0] = kPayloadType;
 
       logw("SendOutgoingData: %p size: %lu ts: %llu(ms)\n",
             pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp/1000);
       //logi("Buffer flags: %08x\n", pBuffer->nFlags);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      kAudioFrameSpeech,
-                     kPayloadType, pBuffer->nTimeStamp / 1000, 0/*capture_time_ms*/,
+                     kPayloadType, pBuffer->nTimeStamp / 1000, -1/*capture_time_ms*/,
                      pBuffer->pBuffer + pBuffer->nOffset,
-                     pBuffer->nFilledLen, &fragment, NULL);
+                     pBuffer->nFilledLen, NULL/*&fragment*/, NULL);
       CHECK_EQ(0, ret);
     }
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 0;
-    pBuffer->nOffset = 0;
+    pBuffer->nOffset = 11;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
     logv("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(40);
+  os_msleep(10);
   return true;
 }
 
@@ -482,7 +575,7 @@ int32_t main(int argc, char *argv[]) {
   profile.nFrameLength = 0;
   profile.nAACtools = OMX_AUDIO_AACToolAll;
   profile.nAACERtools = OMX_AUDIO_AACERNone;
-  profile.eAACProfile = (OMX_AUDIO_AACPROFILETYPE)OMX_AUDIO_AACObjectNull;
+  profile.eAACProfile = (OMX_AUDIO_AACPROFILETYPE)OMX_AUDIO_AACObjectLC;
   profile.eAACStreamFormat = OMX_AUDIO_AACStreamFormatMP4FF;
   profile.nAACtools |= OMX_AUDIO_AACToolAndroidSSBR | OMX_AUDIO_AACToolAndroidDSBR;
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
