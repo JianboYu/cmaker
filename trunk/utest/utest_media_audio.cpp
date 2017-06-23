@@ -112,7 +112,7 @@ public:
 
 class MockTransport : public Transport {
 public:
-  explicit MockTransport(uint32_t rtx_ssrc)
+  explicit MockTransport(uint32_t rtx_ssrc, char *ipsrc, char *ipdst)
       : _count(0),
         _packet_loss(0),
         _consecutive_drop_start(0),
@@ -122,6 +122,9 @@ public:
         _rtp_payload_registry(NULL),
         _rtp_receiver(NULL),
         _rtp_sender(NULL) {
+    strcpy(_ipsrc, ipsrc);
+    strcpy(_ipdst, ipdst);
+    loge("IP src: %s IP dst: %s\n", _ipsrc, ipdst);
   }
 
   virtual bool SendRtp(const uint8_t* packet,
@@ -132,7 +135,7 @@ public:
     socket_addr sock_dst_addr;
     sock_dst_addr._sockaddr_in.sin_family = AF_INET;
     sock_dst_addr._sockaddr_in.sin_port = htons(25060);
-    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.100");
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("172.16.104.13");
 
     //DumpRTPHeader((uint8_t*)packet);
     logi("%02x %02x %02x\n", *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2));
@@ -160,7 +163,7 @@ public:
     socket_addr sock_addr;
     sock_addr._sockaddr_in.sin_family = AF_INET;
     sock_addr._sockaddr_in.sin_port = htons(15060);
-    sock_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.103");
+    sock_addr._sockaddr_in.sin_addr = inet_addr("172.16.1.88");
 
     CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
     CHECK_EQ(true, _rtp_sock->StartReceiving());
@@ -211,6 +214,9 @@ private:
   //udp transport implement
   SocketManager *_sock_mgr;
   Socket *_rtp_sock;
+
+  char _ipsrc[32];
+  char _ipdst[32];
 };
 
 
@@ -358,12 +364,13 @@ bool audio_encoder_loop(void *ctx) {
   OMX_HANDLETYPE hComponent = omx_ctx->hComponent;
   void *pdata = NULL;
   cirq_dequeue(omx_ctx->ebd, &pdata);
+  int32_t audio_frame_time = 10;//ms
   OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 320 * sizeof(int16_t) * 1;
+    pBuffer->nFilledLen = 32 * audio_frame_time * sizeof(int16_t) * 1;
     pBuffer->nOffset = 0;
-    pBuffer->nTimeStamp = omx_ctx->ts * 1000;
+    pBuffer->nTimeStamp = (omx_ctx->ts * 1000);
 
     uint32_t readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
     if (readed < pBuffer->nFilledLen) {
@@ -375,7 +382,7 @@ bool audio_encoder_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     logv("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 10;
+    omx_ctx->ts += audio_frame_time;
   }
 
   pdata = NULL;
@@ -388,14 +395,13 @@ bool audio_encoder_loop(void *ctx) {
     }
     bool isCsd = pBuffer->nFlags == OMX_BUFFERFLAG_CODECCONFIG;
     if (pBuffer->nFilledLen > 0 && !isCsd) {
-      #if 1
+      #if 0
       uint32_t frame_len = 7 + pBuffer->nFilledLen;
       if (pBuffer->nOffset >= 7) {
         pBuffer->nOffset -= 7;
         pBuffer->nFilledLen += 7;
         aac_add_adts_header(frame_len, pBuffer->pBuffer + pBuffer->nOffset);
       }
-      #endif
 
       logw("Buffer flag: %08x\n", pBuffer->nFlags);
       uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
@@ -404,14 +410,23 @@ bool audio_encoder_loop(void *ctx) {
       CHECK_GT(writed, (uint32_t)0);
       fflush(omx_ctx->fp_encoded);
       fflush(omx_ctx->fp_len);
+      #endif
 
-      pBuffer->nOffset -= 2;
-      pBuffer->nFilledLen += 2;
-      int16_t adts_size = pBuffer->nFilledLen + 4;
+      pBuffer->nOffset -= 4;
+      pBuffer->nFilledLen += 4;
+      int16_t adts_size = pBuffer->nFilledLen - 4;
+      loge("adts_size: %d\n", adts_size);
       *(pBuffer->pBuffer + pBuffer->nOffset + 0) = 0x00;
       *(pBuffer->pBuffer + pBuffer->nOffset + 1) = 0x10;
-      *(pBuffer->pBuffer + pBuffer->nOffset + 2) = (adts_size & 0x1fe0) >> 5;
-      *(pBuffer->pBuffer + pBuffer->nOffset + 3) = (adts_size & 0x1f) << 3;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 2) = ((uint8_t)(adts_size & 0x1fe0)) >> 5;
+      *(pBuffer->pBuffer + pBuffer->nOffset + 3) = ((uint8_t)(adts_size & 0x1f)) << 3;
+      loge("%02x %02x %02x %02x %02x %02x\n",
+          *(pBuffer->pBuffer + pBuffer->nOffset + 0),
+          *(pBuffer->pBuffer + pBuffer->nOffset + 1),
+          *(pBuffer->pBuffer + pBuffer->nOffset + 2),
+          *(pBuffer->pBuffer + pBuffer->nOffset + 3),
+          *(pBuffer->pBuffer + pBuffer->nOffset + 4),
+          *(pBuffer->pBuffer + pBuffer->nOffset + 5));
       //Send to network
       //RTPFragmentationHeader fragment;
       //fragment.VerifyAndAllocateFragmentationHeader(1);
@@ -425,7 +440,7 @@ bool audio_encoder_loop(void *ctx) {
       //logi("Buffer flags: %08x\n", pBuffer->nFlags);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      kAudioFrameSpeech,
-                     kPayloadType, pBuffer->nTimeStamp / 1000, -1/*capture_time_ms*/,
+                     kPayloadType, (pBuffer->nTimeStamp*32)/1000, -1/*capture_time_ms*/,
                      pBuffer->pBuffer + pBuffer->nOffset,
                      pBuffer->nFilledLen, NULL/*&fragment*/, NULL);
       CHECK_EQ(0, ret);
@@ -438,7 +453,7 @@ bool audio_encoder_loop(void *ctx) {
     logv("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(10);
+  os_msleep(audio_frame_time);
   return true;
 }
 
@@ -464,6 +479,11 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
 
 int32_t main(int argc, char *argv[]) {
   log_setlevel(eLogInfo);
+  if (argc < 3) {
+    logv("Usage: ./media_audio_utest 192.168.1.0 192.168.1.100 \n");
+    return 0;
+  }
+
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   oRet = OMX_Init();
   CHECK_EQ(oRet, OMX_ErrorNone);
@@ -585,7 +605,7 @@ int32_t main(int argc, char *argv[]) {
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   for (int32_t i = 0; i < 4; ++i) {
-    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 1024 * sizeof(int16_t) * 2);
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 32 * 110 * sizeof(int16_t) * 2);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->inBuffer[i]);
     logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",
@@ -623,7 +643,7 @@ int32_t main(int argc, char *argv[]) {
   SendPacketObserver* send_packet_observer = NULL;
   RateLimiter* nack_rate_limiter = NULL;
 
-  scoped_ptr<MockTransport> transport(new MockTransport(1243));
+  scoped_ptr<MockTransport> transport(new MockTransport(1243, argv[1], argv[2]));
   scoped_ptr<RTPSender> rtp_sender(
                           new RTPSender(audio,
                           clock,

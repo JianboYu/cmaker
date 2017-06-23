@@ -107,7 +107,7 @@ int32_t RTPSenderAudio::RegisterAudioPayload(
 bool RTPSenderAudio::MarkerBit(FrameType frameType, int8_t payload_type) {
   AutoLock cs(_sendAudioCritsect.get());
   // for audio true for first packet in a speech burst
-  bool markerBit = false;
+  bool markerBit = true;//false; modify by jianbo
   if (_lastPayloadType != payload_type) {
     if (payload_type != -1 && (_cngNBPayloadType == payload_type ||
                                _cngWBPayloadType == payload_type ||

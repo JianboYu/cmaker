@@ -112,7 +112,7 @@ public:
 
 class MockTransport : public Transport {
 public:
-  explicit MockTransport(uint32_t rtx_ssrc)
+  explicit MockTransport(uint32_t rtx_ssrc, char *ipsrc, char *ipdst)
       : _count(0),
         _packet_loss(0),
         _consecutive_drop_start(0),
@@ -122,6 +122,9 @@ public:
         _rtp_payload_registry(NULL),
         _rtp_receiver(NULL),
         _rtp_sender(NULL) {
+    strcpy(_ipsrc, ipsrc);
+    strcpy(_ipdst, ipdst);
+    loge("IP src: %s IP dst: %s\n", _ipsrc, ipdst);
   }
 
   virtual bool SendRtp(const uint8_t* packet,
@@ -132,7 +135,7 @@ public:
     socket_addr sock_dst_addr;
     sock_dst_addr._sockaddr_in.sin_family = AF_INET;
     sock_dst_addr._sockaddr_in.sin_port = htons(25050);
-    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.100");
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr(_ipdst);
 
     //DumpRTPHeader((uint8_t*)packet);
     //logi("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
@@ -165,7 +168,7 @@ public:
     socket_addr sock_addr;
     sock_addr._sockaddr_in.sin_family = AF_INET;
     sock_addr._sockaddr_in.sin_port = htons(15050);
-    sock_addr._sockaddr_in.sin_addr = inet_addr("192.168.1.103");
+    sock_addr._sockaddr_in.sin_addr = inet_addr(_ipsrc);
 
     CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
     CHECK_EQ(true, _rtp_sock->StartReceiving());
@@ -216,6 +219,8 @@ private:
   //udp transport implement
   SocketManager *_sock_mgr;
   Socket *_rtp_sock;
+  char _ipsrc[32];
+  char _ipdst[32];
 };
 
 
@@ -317,7 +322,8 @@ bool thread_loop(void *ctx) {
         omx_ctx->csd_size = pBuffer->nFilledLen;
       } else {
 
-        loge("Flags: %08x csd_size: %08x buffer offset: %08x\n", pBuffer->nFlags, omx_ctx->csd_size, pBuffer->nOffset);
+        loge("Flags: %08x csd_size: %08x buffer offset: %08x\n",
+              pBuffer->nFlags, omx_ctx->csd_size, pBuffer->nOffset);
         if (pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME) {
           if (omx_ctx->csd_size <= pBuffer->nOffset) {
             loge("Add csd header for SYNCFrame size:%d\n", omx_ctx->csd_size);
@@ -333,11 +339,11 @@ bool thread_loop(void *ctx) {
         fragment.fragmentationTimeDiff[0] = 0;
         fragment.fragmentationPlType[0] = 0;
 
-        logw("pBuffer: %p nFilledLen: %u nSize: %u nOffset: %u\n",
-            pBuffer, pBuffer->nFilledLen, pBuffer->nAllocLen, pBuffer->nOffset);
+        logw("pBuffer: %p nFilledLen: %u nSize: %u nOffset: %u nFlags: %d\n",
+            pBuffer, pBuffer->nFilledLen, pBuffer->nAllocLen, pBuffer->nOffset,
+            pBuffer->nFlags);
         logw("SendOutgoingData: %p size: %lu ts: %llu\n",
               pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
-        //logi("Buffer flags: %08x\n", pBuffer->nFlags);
         int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                        pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
                           kVideoFrameDelta: kVideoFrameDelta,
@@ -345,9 +351,10 @@ bool thread_loop(void *ctx) {
                        pBuffer->nTimeStamp / 1000, pBuffer->pBuffer + pBuffer->nOffset,
                        pBuffer->nFilledLen, &fragment, NULL);
         CHECK_EQ(0, ret);
-        #if 1
+        #if 0
         //Save raw encoded stream
-        uint32_t writed = fwrite(pBuffer->pBuffer + pBuffer->nOffset, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
+        uint32_t writed = fwrite(pBuffer->pBuffer + pBuffer->nOffset, 1,
+                            pBuffer->nFilledLen, omx_ctx->fp_encoded);
         CHECK_EQ(writed, pBuffer->nFilledLen);
         writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
         CHECK_GT(writed, (uint32_t)0);
@@ -362,7 +369,6 @@ bool thread_loop(void *ctx) {
     pBuffer->nOffset = 24;
     pBuffer->nTimeStamp = 0;
     oRet = OMX_FillThisBuffer(hComponent, pBuffer);
-    //logi("FillThisBuffer: %p\n", pBuffer);
 
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
@@ -392,6 +398,10 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
 
 int32_t main(int argc, char *argv[]) {
   log_setlevel(eLogInfo);
+  if (argc < 3) {
+    logv("Usage: ./media_video_utest 192.168.1.0 192.168.1.100 \n");
+    return 0;
+  }
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   oRet = OMX_Init();
   CHECK_EQ(oRet, OMX_ErrorNone);
@@ -468,6 +478,21 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamPortDefinition, &def);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
+  OMX_VIDEO_PARAM_AVCTYPE avc_type;
+  avc_type.nPortIndex = 1;
+  oRet = OMX_GetParameter(pHandle, OMX_IndexParamVideoAvc, &avc_type);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+  avc_type.nPFrames = 75;
+  avc_type.nBFrames = 0;
+  oRet = OMX_SetParameter(pHandle, OMX_IndexParamVideoAvc, &avc_type);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
+  OMX_VIDEO_CONFIG_AVCINTRAPERIOD avc_period;
+  avc_period.nPortIndex = 1;
+  avc_period.nIDRPeriod = 75;
+  oRet = OMX_SetConfig(pHandle, OMX_IndexConfigVideoAVCIntraPeriod, &avc_period);
+  CHECK_EQ(oRet, OMX_ErrorNone);
+
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
@@ -510,7 +535,7 @@ int32_t main(int argc, char *argv[]) {
   SendPacketObserver* send_packet_observer = NULL;
   RateLimiter* nack_rate_limiter = NULL;
 
-  scoped_ptr<MockTransport> transport(new MockTransport(1243));
+  scoped_ptr<MockTransport> transport(new MockTransport(1243, argv[1], argv[2]));
   scoped_ptr<RTPSender> rtp_sender(
                           new RTPSender(audio,
                           clock,

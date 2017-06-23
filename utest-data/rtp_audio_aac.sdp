@@ -1,0 +1,4 @@
+m=audio 25060 RTP/AVP 97
+a=rtpmap:97 mpeg4-generic/32000/1
+a=fmtp:97 streamtype=5; profile-level-id=15; mode=AAC-hbr; config=1288; SizeLength=13; IndexLength=3; IndexDeltaLength=3;Profile=1;
+c=IN IP4 127.0.0.1

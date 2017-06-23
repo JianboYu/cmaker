@@ -1143,6 +1143,18 @@ OMX_ERRORTYPE SoftAVC::setConfig(
             return OMX_ErrorNone;
         }
 
+       case OMX_IndexConfigVideoAVCIntraPeriod:
+       {
+          OMX_VIDEO_CONFIG_AVCINTRAPERIOD  *params =
+              (OMX_VIDEO_CONFIG_AVCINTRAPERIOD *)_params;
+
+          if (params->nPortIndex != kOutputPortIndex) {
+              return OMX_ErrorBadPortIndex;
+          }
+          mIDRInterval = params->nIDRPeriod;
+          return OMX_ErrorNone;
+       }
+
         default:
             return SimpleSoftOMXComponent::setConfig(index, _params);
     }
