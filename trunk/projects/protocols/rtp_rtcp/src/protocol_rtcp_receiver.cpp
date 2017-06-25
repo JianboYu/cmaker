@@ -11,6 +11,12 @@
 #include <assert.h>
 #include <string.h>
 
+#include <os_log.h>
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTCPReceiver"
+#endif
+
 #include "os_assert.h"
 #include "protocol_rtcp_utility.h"
 #include "protocol_time_util.h"
@@ -39,10 +45,12 @@ RTCPReceiver::RTCPReceiver(
     RtcpPacketTypeCounterObserver* packet_type_counter_observer,
     RtcpBandwidthObserver* rtcp_bandwidth_observer,
     RtcpIntraFrameObserver* rtcp_intra_frame_observer,
-    TransportFeedbackObserver* transport_feedback_observer)
+    TransportFeedbackObserver* transport_feedback_observer,
+    ModuleRtpRtcpImpl* owner)
     : _clock(clock),
       receiver_only_(receiver_only),
       _lastReceived(0),
+      _rtpRtcp(owner),
       _cbRtcpBandwidthObserver(rtcp_bandwidth_observer),
       _cbRtcpIntraFrameObserver(rtcp_intra_frame_observer),
       _cbTransportFeedbackObserver(transport_feedback_observer),
@@ -1250,7 +1258,7 @@ int32_t RTCPReceiver::UpdateTMMBR() {
   // Set bounding set
   // Inform remote clients about the new bandwidth
   // inform the remote client
-  //_rtpRtcp.SetTMMBN(boundingSet);
+  //_rtpRtcp->SetTMMBN(boundingSet);
 
   // might trigger a TMMBN
   if (numBoundingSet == 0) {
@@ -1298,14 +1306,14 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
   }
   if (!receiver_only_ &&
       (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpSrReq)) {
-    //_rtpRtcp.OnRequestSendReport();
+    //_rtpRtcp->OnRequestSendReport();
   }
   if (!receiver_only_ &&
       (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpNack)) {
     if (rtcpPacketInformation.nackSequenceNumbers.size() > 0) {
-      LOG(LS_VERBOSE) << "Incoming NACK length: "
-                   << rtcpPacketInformation.nackSequenceNumbers.size();
-      //_rtpRtcp.OnReceivedNACK(rtcpPacketInformation.nackSequenceNumbers);
+      logv("Incoming NACK length: %d\n",
+        rtcpPacketInformation.nackSequenceNumbers.size());
+      //_rtpRtcp->OnReceivedNACK(rtcpPacketInformation.nackSequenceNumbers);
     }
   }
   {
@@ -1318,11 +1326,11 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
       if ((rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpPli) ||
           (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpFir)) {
         if (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpPli) {
-          LOG(LS_VERBOSE) << "Incoming PLI from SSRC "
-                          << rtcpPacketInformation.remoteSSRC;
+          logv("Incoming PLI from SSRC %d\n",
+                rtcpPacketInformation.remoteSSRC);
         } else {
-          LOG(LS_VERBOSE) << "Incoming FIR from SSRC "
-                          << rtcpPacketInformation.remoteSSRC;
+          logv("Incoming FIR from SSRC %d\n",
+                rtcpPacketInformation.remoteSSRC);
         }
         _cbRtcpIntraFrameObserver->OnReceivedIntraFrameRequest(local_ssrc);
       }
@@ -1338,8 +1346,8 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
     if (_cbRtcpBandwidthObserver) {
       CHECK(!receiver_only_);
       if (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpRemb) {
-        LOG(LS_VERBOSE) << "Incoming REMB: "
-                        << rtcpPacketInformation.receiverEstimatedMaxBitrate;
+        logv("Incoming REMB: %d\n",
+              rtcpPacketInformation.receiverEstimatedMaxBitrate);
         _cbRtcpBandwidthObserver->OnReceivedEstimatedBitrate(
             rtcpPacketInformation.receiverEstimatedMaxBitrate);
       }
@@ -1354,7 +1362,7 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
     }
     if ((rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpSr) ||
         (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpRr)) {
-      //_rtpRtcp.OnReceivedRtcpReportBlocks(rtcpPacketInformation.report_blocks);
+      //_rtpRtcp->OnReceivedRtcpReportBlocks(rtcpPacketInformation.report_blocks);
     }
 
     if (_cbTransportFeedbackObserver &&

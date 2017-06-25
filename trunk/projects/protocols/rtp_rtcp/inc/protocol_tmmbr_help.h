@@ -13,7 +13,7 @@
 
 #include <vector>
 #include "os_typedefs.h"
-#include "rtcp_packet/protocol_tmmb_item.h"
+#include "protocol_tmmb_item.h"
 
 namespace protocol {
 class TMMBRSet : public std::vector<rtcp::TmmbItem>

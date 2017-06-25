@@ -22,6 +22,9 @@
 #include <protocol_rtp_receiver.h>
 #include <protocol_rtp_payload_registry.h>
 #include <protocol_rtp_header_parser.h>
+#include <protocol_rtcp_sender.h>
+#include <protocol_rtcp_receiver.h>
+#include <protocol_receive_statistics.h>
 
 #include <OMX_Core.h>
 #include <OMX_Component.h>
@@ -124,7 +127,7 @@ public:
         _rtp_sender(NULL) {
     strcpy(_ipsrc, ipsrc);
     strcpy(_ipdst, ipdst);
-    loge("IP src: %s IP dst: %s\n", _ipsrc, ipdst);
+    logi("IP src: %s IP dst: %s\n", _ipsrc, ipdst);
   }
 
   virtual bool SendRtp(const uint8_t* packet,
@@ -148,10 +151,19 @@ public:
     int32_t ret = _rtp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
     logv("SendRTP data size: %d\n", ret);
 
-   return true;
+    return true;
   }
   virtual bool SendRtcp(const uint8_t* packet, size_t length) {
-    return 0;//_rtp_sender->IncomingRtcpPacket(packet, length) == 0;
+    logw("SendRtp idx: %08d addr: %p size: %d\n", _count, packet, length);
+    _count++;
+    socket_addr sock_dst_addr;
+    sock_dst_addr._sockaddr_in.sin_family = AF_INET;
+    sock_dst_addr._sockaddr_in.sin_port = htons(25051);
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr(_ipdst);
+
+    int32_t ret = _rtcp_sock->SendTo((const int8_t*)packet, length, sock_dst_addr);
+    logw("SendRTCP data size: %d\n", ret);
+    return true;
   }
   void SetSendModule(RTPSender* sender,
                     RTPPayloadRegistry* rtp_payload_registry,
@@ -172,6 +184,17 @@ public:
 
     CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
     CHECK_EQ(true, _rtp_sock->StartReceiving());
+
+    _rtcp_sock = Socket::CreateSocket(0, _sock_mgr,
+                                      this,
+                                      incomingRTCPSocketCallback);
+
+    sock_addr._sockaddr_in.sin_family = AF_INET;
+    sock_addr._sockaddr_in.sin_port = htons(15050+1);
+    sock_addr._sockaddr_in.sin_addr = inet_addr(_ipsrc);
+
+    CHECK_EQ(true, _rtcp_sock->Bind(sock_addr));
+    CHECK_EQ(true, _rtcp_sock->StartReceiving());
   }
   static void incomingSocketCallback(CallbackObj obj, const int8_t* buf,
                                       int32_t len, const socket_addr* from) {
@@ -198,6 +221,32 @@ public:
     //logv("incoming buf[%p] size[%d] from[%p]\n", buf, len, from);
   }
 
+  static void incomingRTCPSocketCallback(CallbackObj obj, const int8_t* buf,
+                                      int32_t len, const socket_addr* from) {
+    MockTransport *pThis = static_cast<MockTransport*>(obj);
+    const uint8_t *rtcp_packet = (const uint8_t*)buf;
+    int32_t packet_length = len;
+
+    // Allow receive of non-compound RTCP packets.
+    RTCPUtility::RTCPParserV2 rtcp_parser(rtcp_packet, packet_length, true);
+
+    const bool valid_rtcpheader = rtcp_parser.IsValid();
+    if (!valid_rtcpheader) {
+      loge("Incoming invalid RTCP packet\n");
+      return;
+    }
+    RTCPHelp::RTCPPacketInformation rtcp_packet_information;
+    int32_t ret = pThis->_rtcp_receiver->IncomingRTCPPacket(
+        rtcp_packet_information, &rtcp_parser);
+    if (ret == 0) {
+      pThis->_rtcp_receiver->TriggerCallbacksFromRTCPPacket(rtcp_packet_information);
+    }
+    if (ret) {
+      loge("incomingRTCPSocketCallback error\n");
+    }
+    logw("incoming rtcp buf[%p] size[%d] from[%p]\n", buf, len, from);
+  }
+
   void DropEveryNthPacket(int n) { _packet_loss = n; }
   void DropConsecutivePackets(int start, int total) {
     _consecutive_drop_start = start;
@@ -214,15 +263,30 @@ private:
   RTPPayloadRegistry* _rtp_payload_registry;
   RtpReceiver* _rtp_receiver;
   RTPSender* _rtp_sender;
-  std::set<uint16_t> _expected_sequence_numbers;
+  RTCPReceiver* _rtcp_receiver;
+  RTCPSender* _rtcp_sender;
 
   //udp transport implement
   SocketManager *_sock_mgr;
   Socket *_rtp_sock;
+  Socket *_rtcp_sock;
   char _ipsrc[32];
   char _ipdst[32];
 };
 
+class RtcpPacketTypeCounterObserverImpl : public RtcpPacketTypeCounterObserver {
+ public:
+  RtcpPacketTypeCounterObserverImpl() : ssrc_(0) {}
+  virtual ~RtcpPacketTypeCounterObserverImpl() {}
+  void RtcpPacketTypesCounterUpdated(
+      uint32_t ssrc,
+      const RtcpPacketTypeCounter& packet_counter) override {
+    ssrc_ = ssrc;
+    counter_ = packet_counter;
+  }
+  uint32_t ssrc_;
+  RtcpPacketTypeCounter counter_;
+};
 
 template<class T>
 static void InitOMXParams(T *params) {
@@ -250,6 +314,9 @@ typedef struct OMXContext {
   RTPSender *rtp_sender;
   uint8_t *csd;
   uint32_t csd_size;
+
+  RTCPSender *rtcp_sender;
+  RTCPReceiver *rtcp_receiver;
 }OMXContext;
 
 OMX_ERRORTYPE sEventHandler(
@@ -284,6 +351,43 @@ OMX_ERRORTYPE sFillBufferDone(
     return OMX_ErrorNone;
 }
 
+RTCPSender::FeedbackState GetFeedbackState(OMXContext *omx_ctx) {
+  StreamDataCounters rtp_stats;
+  StreamDataCounters rtx_stats;
+  omx_ctx->rtp_sender->GetDataCounters(&rtp_stats, &rtx_stats);
+
+  RTCPSender::FeedbackState state;
+  state.send_payload_type = omx_ctx->rtp_sender->SendPayloadType();
+  state.frequency_hz = omx_ctx->rtp_sender->SendPayloadFrequency();
+  state.packets_sent = rtp_stats.transmitted.packets +
+                       rtx_stats.transmitted.packets;
+  state.media_bytes_sent = rtp_stats.transmitted.payload_bytes +
+                           rtx_stats.transmitted.payload_bytes;
+  //state.module = omx_ctx;
+
+  //LastReceivedNTP(&state.last_rr_ntp_secs,
+  //                &state.last_rr_ntp_frac,
+  //                &state.remote_sr);
+  // Remote SR: NTP inside the last received (mid 16 bits from sec and frac).
+  uint32_t ntp_secs = 0;
+  uint32_t ntp_frac = 0;
+
+  if (!omx_ctx->rtcp_receiver->NTP(&ntp_secs,
+                          &ntp_frac,
+                          &state.last_rr_ntp_secs,
+                          &state.last_rr_ntp_frac,
+                          NULL)) {
+  }
+  state.remote_sr =
+      ((ntp_secs & 0x0000ffff) << 16) + ((ntp_frac & 0xffff0000) >> 16);
+
+  state.has_last_xr_rr = omx_ctx->rtcp_receiver->LastReceivedXrReferenceTimeInfo(&state.last_xr_rr);
+
+  state.send_bitrate = omx_ctx->rtp_sender->BitrateSent();
+
+  return state;
+}
+
 bool thread_loop(void *ctx) {
   OMX_ERRORTYPE oRet = OMX_ErrorNone;
   OMXContext *omx_ctx = (OMXContext *)ctx;
@@ -296,7 +400,7 @@ bool thread_loop(void *ctx) {
     pBuffer->nFlags = 0;
     pBuffer->nFilledLen = 1280*720*3 >> 1;
     pBuffer->nOffset = 0;
-    pBuffer->nTimeStamp = omx_ctx->ts;
+    pBuffer->nTimeStamp = omx_ctx->ts * 1000;
 
     uint32_t readed = fread(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp);
     if (readed < pBuffer->nFilledLen) {
@@ -307,7 +411,7 @@ bool thread_loop(void *ctx) {
     oRet = OMX_EmptyThisBuffer(hComponent, pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
     //logi("EmptyThisBuffer: %p\n", pBuffer);
-    omx_ctx->ts += 33*1000;
+    omx_ctx->ts += 33;
   }
 
   pdata = NULL;
@@ -321,16 +425,19 @@ bool thread_loop(void *ctx) {
         memcpy(omx_ctx->csd, pBuffer->pBuffer+ pBuffer->nOffset, pBuffer->nFilledLen);
         omx_ctx->csd_size = pBuffer->nFilledLen;
       } else {
-
-        loge("Flags: %08x csd_size: %08x buffer offset: %08x\n",
-              pBuffer->nFlags, omx_ctx->csd_size, pBuffer->nOffset);
         if (pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME) {
           if (omx_ctx->csd_size <= pBuffer->nOffset) {
-            loge("Add csd header for SYNCFrame size:%d\n", omx_ctx->csd_size);
+            logi("Add csd header for SYNCFrame size:%d\n", omx_ctx->csd_size);
             pBuffer->nOffset -=  omx_ctx->csd_size;
             pBuffer->nFilledLen += omx_ctx->csd_size;
             memcpy(pBuffer->pBuffer + pBuffer->nOffset, omx_ctx->csd, omx_ctx->csd_size);
           }
+        }
+
+        omx_ctx->rtcp_sender->SetLastRtpTime((pBuffer->nTimeStamp / 1000)*90, pBuffer->nTimeStamp / 1000);
+        // Make sure an RTCP report isn't queued behind a key frame.
+        if (pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME/*omx_ctx->rtcp_sender->TimeToSendRTCPReport(pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME)*/) {
+          omx_ctx->rtcp_sender->SendRTCP(GetFeedbackState(omx_ctx), kRtcpReport);
         }
 
         fragment.VerifyAndAllocateFragmentationHeader(1);
@@ -339,14 +446,14 @@ bool thread_loop(void *ctx) {
         fragment.fragmentationTimeDiff[0] = 0;
         fragment.fragmentationPlType[0] = 0;
 
-        logw("pBuffer: %p nFilledLen: %u nSize: %u nOffset: %u nFlags: %d\n",
+        logv("pBuffer: %p nFilledLen: %u nSize: %u nOffset: %u nFlags: %d\n",
             pBuffer, pBuffer->nFilledLen, pBuffer->nAllocLen, pBuffer->nOffset,
             pBuffer->nFlags);
-        logw("SendOutgoingData: %p size: %lu ts: %llu\n",
+        logv("SendOutgoingData: %p size: %lu ts: %llu\n",
               pBuffer->pBuffer, pBuffer->nFilledLen, pBuffer->nTimeStamp);
         int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                        pBuffer->nFlags == OMX_BUFFERFLAG_SYNCFRAME ?
-                          kVideoFrameDelta: kVideoFrameDelta,
+                          kVideoFrameKey: kVideoFrameDelta,
                        kPayloadType, (pBuffer->nTimeStamp / 1000)*90,
                        pBuffer->nTimeStamp / 1000, pBuffer->pBuffer + pBuffer->nOffset,
                        pBuffer->nFilledLen, &fragment, NULL);
@@ -397,7 +504,7 @@ void DumpPortDefine(OMX_PARAM_PORTDEFINITIONTYPE *def) {
 }
 
 int32_t main(int argc, char *argv[]) {
-  log_setlevel(eLogInfo);
+  log_setlevel(eLogWarn);
   if (argc < 3) {
     logv("Usage: ./media_video_utest 192.168.1.0 192.168.1.100 \n");
     return 0;
@@ -456,7 +563,7 @@ int32_t main(int argc, char *argv[]) {
   def.format.video.nStride = def.format.video.nFrameWidth;
   def.format.video.nSliceHeight = def.format.video.nFrameHeight;
   def.format.video.nBitrate = 0;
-  def.format.video.xFramerate = 30 << 16;
+  def.format.video.xFramerate = 15 << 16;
   def.format.video.eCompressionFormat = OMX_VIDEO_CodingUnused;
   def.format.video.eColorFormat = OMX_COLOR_FormatYUV420Planar;
   DumpPortDefine(&def);
@@ -482,14 +589,14 @@ int32_t main(int argc, char *argv[]) {
   avc_type.nPortIndex = 1;
   oRet = OMX_GetParameter(pHandle, OMX_IndexParamVideoAvc, &avc_type);
   CHECK_EQ(oRet, OMX_ErrorNone);
-  avc_type.nPFrames = 75;
+  avc_type.nPFrames = 150;
   avc_type.nBFrames = 0;
   oRet = OMX_SetParameter(pHandle, OMX_IndexParamVideoAvc, &avc_type);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   OMX_VIDEO_CONFIG_AVCINTRAPERIOD avc_period;
   avc_period.nPortIndex = 1;
-  avc_period.nIDRPeriod = 75;
+  avc_period.nIDRPeriod = 150;
   oRet = OMX_SetConfig(pHandle, OMX_IndexConfigVideoAVCIntraPeriod, &avc_period);
   CHECK_EQ(oRet, OMX_ErrorNone);
 
@@ -549,16 +656,13 @@ int32_t main(int argc, char *argv[]) {
                           event_log,
                           send_packet_observer,
                           nack_rate_limiter));
-  rtp_sender->SetStartTimestamp(123654, true);
-  log_verbose("tag", "start tick: %lld ts: %u\n", clock->TimeInMilliseconds(),
-                      rtp_sender->StartTimestamp());
-  scoped_array<uint8_t> rtp_header(new uint8_t[128]);
-  ret = rtp_sender->BuildRTPheader(rtp_header.get(),
-                              126,
-                              true,
-                              1357,
-                              2468);
-  CHECK_GT(ret, 0);
+  //scoped_array<uint8_t> rtp_header(new uint8_t[128]);
+  //ret = rtp_sender->BuildRTPheader(rtp_header.get(),
+  //                            126,
+  //                            true,
+  //                            1357,
+  //                            2468);
+  //CHECK_GT(ret, 0);
   //DumpRTPHeader(rtp_header.get());
 
   scoped_ptr<RTPPayloadRegistry> rtp_payload_registry(new RTPPayloadRegistry(
@@ -573,27 +677,78 @@ int32_t main(int argc, char *argv[]) {
                     rtp_receiver.get());
 
   rtp_sender->SetSSRC(kTestSsrc);
-  ret = rtp_sender->RegisterPayload("H264", kPayloadType, 9000, 1, 0);
+  ret = rtp_sender->RegisterPayload("H264", kPayloadType, 90000, 1, 0);
   CHECK_EQ(0, ret);
-  scoped_array<uint8_t> payload_data(new uint8_t[65000]);
-  uint32_t payload_data_length = 3030;
-  for (uint32_t i = 0; i < payload_data_length; ++i) {
-    payload_data[i] = i % 128;
-  }
   rtp_payload_registry->SetRtxSsrc(kTestSsrc + 1);
   bool created_new_payload = false;
   ret = rtp_payload_registry->RegisterReceivePayload(
                       "H264",
                       kPayloadType,
-                      9000,
+                      90000,
                       1,
                       0, &created_new_payload);
   CHECK_EQ(0, ret);
   omx_ctx->rtp_sender = rtp_sender.get();
 
+  /********************************************************
+  *               RTCP
+  *********************************************************/
+  scoped_ptr<ReceiveStatistics> receive_statistics(ReceiveStatistics::Create(clock));
+  scoped_ptr<RtcpPacketTypeCounterObserver>  \
+          packet_type_counter_observer(new RtcpPacketTypeCounterObserverImpl()) ;
+  scoped_ptr<RTCPSender> rtcp_sender(
+                        new RTCPSender(audio,
+                                       clock,
+                                       receive_statistics.get(),
+                                       packet_type_counter_observer.get(),
+                                       event_log,
+                                       transport.get()));
+
+  bool receiver_only = true;
+  scoped_ptr<RtcpPacketTypeCounterObserver>  \
+        packet_type_counter_observer_rec (new RtcpPacketTypeCounterObserverImpl());
+  scoped_ptr<RtcpBandwidthObserver> rtcp_bandwidth_observer;
+  scoped_ptr<RtcpIntraFrameObserver> rtcp_intra_frame_observer;
+  scoped_ptr<TransportFeedbackObserver> transport_feedback_observer;
+  scoped_ptr<RTCPReceiver> rtcp_receiver (
+                        new RTCPReceiver(clock,
+                                         receiver_only,
+                                         packet_type_counter_observer_rec.get(),
+                                         rtcp_bandwidth_observer.get(),
+                                         rtcp_intra_frame_observer.get(),
+                                         transport_feedback_observer.get()));
+
+
+  omx_ctx->rtcp_sender = rtcp_sender.get();
+  omx_ctx->rtcp_receiver = rtcp_receiver.get();
+
+  //Start sending
+  rtp_sender->SetStartTimestamp(123654, true);
+  log_verbose("tag", "start tick: %lld ts: %u\n", clock->TimeInMilliseconds(),
+                      rtp_sender->StartTimestamp());
+
+  rtp_sender->SetSendingStatus(true/*sending*/);
+  // Make sure the RTCP sender has the same timestamp offset.
+  rtcp_sender->SetStartTimestamp(rtp_sender->StartTimestamp());
+
+  // Make sure that RTCP objects are aware of our SSRC (it could have changed
+  // Due to collision)
+  uint32_t SSRC = rtp_sender->SSRC();
+  rtcp_sender->SetSSRC(SSRC);
+  std::set<uint32_t> ssrcs;
+  ssrcs.insert(SSRC);
+  if (rtp_sender->RtxStatus() != kRtxOff)
+    ssrcs.insert(rtp_sender->RtxSsrc());
+  rtcp_receiver->SetSsrcs(SSRC, ssrcs);
+  rtcp_sender->SetRTCPStatus(RtcpMode::kCompound);
+  logw("Default MTU: %d\n", rtp_sender->MaxPayloadLength());
+  rtp_sender->SetMaxPayloadLength(1024);
+  logw("Default cur MTU: %d\n", rtp_sender->MaxPayloadLength());
+
   uint32_t tid = 0;
   omx_ctx->thread->start(tid);
-  os_sleep(1000);
+
+  getchar();
 
   oRet = OMX_SendCommand(pHandle, OMX_CommandStateSet, OMX_StateIdle, NULL);
   CHECK_EQ(oRet, OMX_ErrorNone);

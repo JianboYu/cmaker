@@ -75,6 +75,8 @@ static void os_printf(int32_t level, const char *tag, const char *fmt, va_list a
 }
 
 void log_trace(int32_t level, const char *tag, const char *fmt, ...) {
+  if (gs_log_level > level)
+    return;
   va_list args;
   va_start(args, fmt);
   os_printf(level, tag, fmt, args);
@@ -82,6 +84,8 @@ void log_trace(int32_t level, const char *tag, const char *fmt, ...) {
 }
 
 void log_verbose(const char *tag, const char *fmt, ...) {
+  if (gs_log_level > eLogVerbose)
+    return;
   va_list args;
   va_start(args, fmt);
   os_printf(eLogVerbose, tag, fmt, args);
@@ -89,6 +93,8 @@ void log_verbose(const char *tag, const char *fmt, ...) {
 
 }
 void log_info(const char *tag, const char *fmt, ...) {
+  if (gs_log_level > eLogInfo)
+    return;
   va_list args;
   va_start(args, fmt);
   os_printf(eLogInfo, tag, fmt, args);
@@ -96,6 +102,8 @@ void log_info(const char *tag, const char *fmt, ...) {
 
 }
 void log_warn(const char *tag, const char *fmt, ...) {
+  if (gs_log_level > eLogWarn)
+    return;
   va_list args;
   va_start(args, fmt);
   os_printf(eLogWarn, tag, fmt, args);
@@ -103,6 +111,8 @@ void log_warn(const char *tag, const char *fmt, ...) {
 
 }
 void log_error(const char *tag, const char *fmt, ...) {
+  if (gs_log_level > eLogError)
+    return;
   va_list args;
   va_start(args, fmt);
   os_printf(eLogError, tag, fmt, args);

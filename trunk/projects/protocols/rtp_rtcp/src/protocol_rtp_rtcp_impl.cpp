@@ -16,7 +16,6 @@
 #include "protocol_rtp_rtcp_defines.h"
 #include "protocol_rtp_rtcp_impl.h"
 #include "protocol_config.h"
-//#include "system_wrappers/interface/trace.h"
 
 #ifdef _WIN32
 // Disable warning C4355: 'this' : used in base member initializer list.

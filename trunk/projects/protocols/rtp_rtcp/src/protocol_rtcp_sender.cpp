@@ -28,7 +28,7 @@
 #include "rtcp_packet/protocol_tmmbn.h"
 #include "rtcp_packet/protocol_tmmbr.h"
 #include "rtcp_packet/protocol_transport_feedback.h"
-//#include "protocol_rtp_rtcp_impl.h"
+#include "protocol_rtp_rtcp_impl.h"
 #include "protocol_tmmbr_help.h"
 #include "protocol_rtcp_sender.h"
 #include "protocol_event_log.h"
@@ -73,8 +73,8 @@ RTCPSender::FeedbackState::FeedbackState()
       last_rr_ntp_secs(0),
       last_rr_ntp_frac(0),
       remote_sr(0),
-      has_last_xr_rr(false)/*,
-      module(NULL)*/ {}
+      has_last_xr_rr(false),
+      module(NULL) {}
 
 class PacketContainer : public rtcp::CompoundPacket,
                         public rtcp::RtcpPacket::PacketReadyCallback {
@@ -574,7 +574,7 @@ void RTCPSender::SetTargetBitrate(unsigned int target_bitrate) {
 
 std::unique_ptr<rtcp::RtcpPacket> RTCPSender::BuildTMMBR(
     const RtcpContext& ctx) {
-  /*if (ctx.feedback_state_.module == NULL)*/
+  if (ctx.feedback_state_.module == NULL)
     return NULL;
   // Before sending the TMMBR check the received TMMBN, only an owner is
   // allowed to raise the bitrate:
@@ -591,7 +591,7 @@ std::unique_ptr<rtcp::RtcpPacket> RTCPSender::BuildTMMBR(
   // will accuire criticalSectionRTCPReceiver_ is a potental deadlock but
   // since RTCPreceiver is not doing the reverse we should be fine
   int32_t lengthOfBoundingSet = 0;
-      //ctx.feedback_state_.module->BoundingSet(&tmmbrOwner, candidateSet);
+  ctx.feedback_state_.module->BoundingSet(&tmmbrOwner, candidateSet);
 
   if (lengthOfBoundingSet > 0) {
     for (int32_t i = 0; i < lengthOfBoundingSet; i++) {
@@ -759,7 +759,7 @@ int32_t RTCPSender::SendCompoundRTCP(
   {
     AutoLock cs(critical_section_rtcp_sender_.get());
     if (method_ == RtcpMode::kOff) {
-      LOG(LS_WARNING) << "Can't send rtcp if it is disabled.";
+      logw("Can't send rtcp if it is disabled.\n");
       return -1;
     }
 

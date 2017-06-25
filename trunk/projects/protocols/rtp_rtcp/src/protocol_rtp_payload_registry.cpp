@@ -8,6 +8,12 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <os_log.h>
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPPayloadReg"
+#endif
+
 #include "protocol_rtp_payload_registry.h"
 #include "protocol_byte_io.h"
 
@@ -58,8 +64,7 @@ int32_t RTPPayloadRegistry::RegisterReceivePayload(
     case 77:        //  205 Transport layer FB message.
     case 78:        //  206 Payload-specific FB message.
     case 79:        //  207 Extended report.
-      LOG(LS_ERROR) << "Can't register invalid receiver payload type: "
-                    << payload_type;
+      logw("Can't register invalid receiver payload type: %d\n", payload_type);
       return -1;
     default:
       break;
@@ -91,8 +96,7 @@ int32_t RTPPayloadRegistry::RegisterReceivePayload(
         return 0;
       }
     }
-    LOG(LS_ERROR) << "Payload type already registered: "
-                  << static_cast<int>(payload_type);
+    loge("Payload type already registered: %d\n", static_cast<int>(payload_type));
     return -1;
   }
 
@@ -296,7 +300,7 @@ void RTPPayloadRegistry::SetRtxPayloadType(int payload_type,
                                            int associated_payload_type) {
   AutoLock cs(crit_sect_.get());
   if (payload_type < 0) {
-    LOG(LS_ERROR) << "Invalid RTX payload type: " << payload_type;
+    loge("Invalid RTX payload type: %d\n", payload_type);
     return;
   }
 

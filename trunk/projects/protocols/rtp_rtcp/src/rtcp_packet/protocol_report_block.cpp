@@ -10,7 +10,7 @@
 
 #include "os_assert.h"
 #include "protocol_byte_io.h"
-#include "rtcp_packet/protocol_report_block.h"
+#include "protocol_report_block.h"
 
 namespace protocol {
 namespace rtcp {

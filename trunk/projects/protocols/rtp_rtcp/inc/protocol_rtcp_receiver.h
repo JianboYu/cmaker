@@ -31,6 +31,8 @@ using namespace core;
 
 namespace protocol {
 
+class ModuleRtpRtcpImpl;
+
 class RTCPReceiver
 {
 public:
@@ -39,7 +41,8 @@ public:
               RtcpPacketTypeCounterObserver* packet_type_counter_observer,
               RtcpBandwidthObserver* rtcp_bandwidth_observer,
               RtcpIntraFrameObserver* rtcp_intra_frame_observer,
-              TransportFeedbackObserver* transport_feedback_observer);
+              TransportFeedbackObserver* transport_feedback_observer,
+              ModuleRtpRtcpImpl* owner = NULL);
     virtual ~RTCPReceiver();
 
     int64_t LastReceived();
@@ -269,6 +272,8 @@ protected:
   Clock* const _clock;
   const bool receiver_only_;
   int64_t _lastReceived;
+  ModuleRtpRtcpImpl *_rtpRtcp;
+
 
   scoped_ptr<Mutex> _criticalSectionFeedbacks;
   RtcpBandwidthObserver* const _cbRtcpBandwidthObserver;

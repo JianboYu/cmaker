@@ -28,11 +28,11 @@
 #include "protocol_event_log.h"
 #include "protocol_receive_statistics.h"
 #include "protocol_rtp_rtcp_defines.h"
-#include "protocol_rtcp_packet.h"
+//#include "protocol_rtcp_packet.h"
 #include "protocol_rtcp_utility.h"
 #include "protocol_remote_bitrate_estimator.h"
-#include "rtcp_packet/protocol_report_block.h"
-#include "rtcp_packet/protocol_tmmb_item.h"
+#include "protocol_report_block.h"
+#include "protocol_tmmb_item.h"
 
 #define EXCLUSIVE_LOCKS_REQUIRED(exp)
 
@@ -40,6 +40,8 @@ using namespace os;
 using namespace core;
 
 namespace protocol {
+
+class ModuleRtpRtcpImpl;
 
 class NACKStringBuilder {
  public:
@@ -75,7 +77,7 @@ class RTCPSender {
     RtcpReceiveTimeInfo last_xr_rr;
 
     // Used when generating TMMBR.
-    //ModuleRtpRtcpImpl* module;
+    ModuleRtpRtcpImpl * module;
   };
 
   RTCPSender(bool audio,

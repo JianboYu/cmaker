@@ -13,7 +13,12 @@
 #include <string.h>  // memcpy()
 
 #include <os_log.h>
-#include "protocol_rtp_receiver_audio.h"
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPReceiverAudio"
+#endif
+
+#include <protocol_rtp_receiver_audio.h>
 
 namespace protocol {
 RTPReceiverStrategy* RTPReceiverStrategy::CreateAudioStrategy(

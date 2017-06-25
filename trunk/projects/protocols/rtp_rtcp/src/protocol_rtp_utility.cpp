@@ -11,6 +11,12 @@
 #include <string.h>
 
 #include <os_log.h>
+#ifdef LOGTAG
+#undef LOGTAG
+#define LOGTAG "RTPUtility"
+#endif
+
+
 #include "protocol_byte_io.h"
 #include "protocol_rtp_utility.h"
 
@@ -195,7 +201,6 @@ bool RtpHeaderParser::Parse(RTPHeader* header,
   const uint16_t sequenceNumber = (_ptrRTPDataBegin[2] << 8) +
       _ptrRTPDataBegin[3];
 
-  loge("sequenceNumber: %d\n", sequenceNumber);
   const uint8_t* ptr = &_ptrRTPDataBegin[4];
 
   uint32_t RTPTimestamp = ByteReader<uint32_t>::ReadBigEndian(ptr);

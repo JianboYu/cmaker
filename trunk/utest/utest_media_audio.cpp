@@ -135,7 +135,7 @@ public:
     socket_addr sock_dst_addr;
     sock_dst_addr._sockaddr_in.sin_family = AF_INET;
     sock_dst_addr._sockaddr_in.sin_port = htons(25060);
-    sock_dst_addr._sockaddr_in.sin_addr = inet_addr("172.16.104.13");
+    sock_dst_addr._sockaddr_in.sin_addr = inet_addr(_ipdst);
 
     //DumpRTPHeader((uint8_t*)packet);
     logi("%02x %02x %02x\n", *(packet + 12 + 0), *(packet + 12 + 1), *(packet + 12 + 2));
@@ -163,7 +163,7 @@ public:
     socket_addr sock_addr;
     sock_addr._sockaddr_in.sin_family = AF_INET;
     sock_addr._sockaddr_in.sin_port = htons(15060);
-    sock_addr._sockaddr_in.sin_addr = inet_addr("172.16.1.88");
+    sock_addr._sockaddr_in.sin_addr = inet_addr(_ipsrc);
 
     CHECK_EQ(true, _rtp_sock->Bind(sock_addr));
     CHECK_EQ(true, _rtp_sock->StartReceiving());

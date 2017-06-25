@@ -16,7 +16,7 @@
 #include "os_typedefs.h"
 #include "core_constructor.h"
 #include "protocol_rtcp_packet.h"
-#include "rtcp_packet/protocol_report_block.h"
+#include "protocol_report_block.h"
 
 namespace protocol {
 namespace rtcp {
