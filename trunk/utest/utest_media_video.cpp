@@ -38,7 +38,7 @@ using namespace core;
 using namespace utility;
 using namespace protocol;
 
-#define kTestSsrc (1243)
+#define kTestSsrc (3248)
 const int kNumFrames = 30;
 const int kPayloadType = 123;
 const int kRtxPayloadType = 98;
