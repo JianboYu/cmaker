@@ -320,7 +320,7 @@ int32_t aac_add_adts_header(uint32_t frame_len, uint8_t *dst) {
     const uint8_t kProfileCode = OMX_AUDIO_AACObjectLC - 1;
     uint8_t kSampleFreqIndex = 5;/*32kHZ*/
     const uint8_t kPrivateStream = 0;
-    const uint8_t kChannelConfigCode = 2/*1: mono 2: stero*/;
+    const uint8_t kChannelConfigCode = 1/*1: mono 2: stero*/;
     data = (kProfileCode << 6);
     data |= (kSampleFreqIndex << 2);
     data |= (kPrivateStream << 1);
@@ -368,7 +368,7 @@ bool audio_encoder_loop(void *ctx) {
   OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 32 * audio_frame_time * sizeof(int16_t) * 2;
+    pBuffer->nFilledLen = 32 * audio_frame_time * sizeof(int16_t) * 1;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = (omx_ctx->ts * 1000);
 
@@ -506,11 +506,11 @@ int32_t main(int argc, char *argv[]) {
   omx_ctx->thread = os::Thread::Create(audio_encoder_loop, omx_ctx);
   omx_ctx->ts = 3600;
   omx_ctx->encode = true;
-  omx_ctx->fp = fopen("32k-stereo-16bw-all-your-life.pcm", "r");
+  omx_ctx->fp = fopen("32k-mono-16bw-all-your-life.pcm", "r");
   omx_ctx->fp_encoded = fopen("32k-mono-16width.aac", "w+");
   omx_ctx->fp_len = fopen("32k-mono-16width-aac.len", "w+");
 
-  OMX_U32 numChannels = 2;
+  OMX_U32 numChannels = 1;
   OMX_U32 sampleRate = 32000;
   OMX_U32 bitRate = 32000;
 

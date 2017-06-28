@@ -31,7 +31,16 @@ using namespace core;
 
 namespace protocol {
 
-class ModuleRtpRtcpImpl;
+class IRTCPReceiverCallback {
+public:
+  virtual ~IRTCPReceiverCallback() {}
+
+  virtual void OnReceivedNACK(const std::list<uint16_t>& nack_sequence_numbers) = 0;
+  virtual void OnReceivedRtcpReportBlocks(const ReportBlockList& report_blocks) = 0;
+  virtual void OnRequestSendReport() = 0;
+
+  virtual void SetTMMBN(const std::vector<rtcp::TmmbItem>* bounding_set) = 0;
+};
 
 class RTCPReceiver
 {
@@ -42,7 +51,7 @@ public:
               RtcpBandwidthObserver* rtcp_bandwidth_observer,
               RtcpIntraFrameObserver* rtcp_intra_frame_observer,
               TransportFeedbackObserver* transport_feedback_observer,
-              ModuleRtpRtcpImpl* owner = NULL);
+              IRTCPReceiverCallback * cb = NULL);
     virtual ~RTCPReceiver();
 
     int64_t LastReceived();
@@ -272,7 +281,7 @@ protected:
   Clock* const _clock;
   const bool receiver_only_;
   int64_t _lastReceived;
-  ModuleRtpRtcpImpl *_rtpRtcp;
+  IRTCPReceiverCallback *_cb;
 
 
   scoped_ptr<Mutex> _criticalSectionFeedbacks;

@@ -46,11 +46,11 @@ RTCPReceiver::RTCPReceiver(
     RtcpBandwidthObserver* rtcp_bandwidth_observer,
     RtcpIntraFrameObserver* rtcp_intra_frame_observer,
     TransportFeedbackObserver* transport_feedback_observer,
-    ModuleRtpRtcpImpl* owner)
+    IRTCPReceiverCallback * cb)
     : _clock(clock),
       receiver_only_(receiver_only),
       _lastReceived(0),
-      _rtpRtcp(owner),
+      _cb(cb),
       _cbRtcpBandwidthObserver(rtcp_bandwidth_observer),
       _cbRtcpIntraFrameObserver(rtcp_intra_frame_observer),
       _cbTransportFeedbackObserver(transport_feedback_observer),
@@ -1258,7 +1258,7 @@ int32_t RTCPReceiver::UpdateTMMBR() {
   // Set bounding set
   // Inform remote clients about the new bandwidth
   // inform the remote client
-  //_rtpRtcp->SetTMMBN(boundingSet);
+  _cb->SetTMMBN(boundingSet);
 
   // might trigger a TMMBN
   if (numBoundingSet == 0) {
@@ -1306,14 +1306,14 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
   }
   if (!receiver_only_ &&
       (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpSrReq)) {
-    //_rtpRtcp->OnRequestSendReport();
+    _cb->OnRequestSendReport();
   }
   if (!receiver_only_ &&
       (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpNack)) {
     if (rtcpPacketInformation.nackSequenceNumbers.size() > 0) {
       logv("Incoming NACK length: %d\n",
         rtcpPacketInformation.nackSequenceNumbers.size());
-      //_rtpRtcp->OnReceivedNACK(rtcpPacketInformation.nackSequenceNumbers);
+      _cb->OnReceivedNACK(rtcpPacketInformation.nackSequenceNumbers);
     }
   }
   {
@@ -1362,7 +1362,7 @@ void RTCPReceiver::TriggerCallbacksFromRTCPPacket(
     }
     if ((rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpSr) ||
         (rtcpPacketInformation.rtcpPacketTypeFlags & kRtcpRr)) {
-      //_rtpRtcp->OnReceivedRtcpReportBlocks(rtcpPacketInformation.report_blocks);
+      _cb->OnReceivedRtcpReportBlocks(rtcpPacketInformation.report_blocks);
     }
 
     if (_cbTransportFeedbackObserver &&

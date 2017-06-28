@@ -33,6 +33,7 @@
 #include "protocol_remote_bitrate_estimator.h"
 #include "protocol_report_block.h"
 #include "protocol_tmmb_item.h"
+#include "protocol_tmmbr_help.h"
 
 #define EXCLUSIVE_LOCKS_REQUIRED(exp)
 
@@ -41,7 +42,12 @@ using namespace core;
 
 namespace protocol {
 
-class ModuleRtpRtcpImpl;
+class IRTCPSenderCallback {
+public:
+  virtual ~IRTCPSenderCallback() {}
+
+  virtual int32_t BoundingSet(bool* tmmbr_owner, TMMBRSet* bounding_set_rec) = 0;
+};
 
 class NACKStringBuilder {
  public:
@@ -77,7 +83,7 @@ class RTCPSender {
     RtcpReceiveTimeInfo last_xr_rr;
 
     // Used when generating TMMBR.
-    ModuleRtpRtcpImpl * module;
+    IRTCPSenderCallback * cb;
   };
 
   RTCPSender(bool audio,

@@ -30,7 +30,8 @@ using namespace core;
 
 namespace protocol {
 
-class ModuleRtpRtcpImpl : public RtpRtcp {
+class ModuleRtpRtcpImpl : public RtpRtcp, public IRTCPReceiverCallback,
+                          public IRTCPSenderCallback {
  public:
   explicit ModuleRtpRtcpImpl(const RtpRtcp::Configuration& configuration);
 
@@ -207,7 +208,7 @@ class ModuleRtpRtcpImpl : public RtpRtcp {
 
   void SetTMMBRStatus(bool enable) override;
 
-  void SetTMMBN(const std::vector<rtcp::TmmbItem>* bounding_set);
+  void SetTMMBN(const std::vector<rtcp::TmmbItem>* bounding_set) override;
 
   uint16_t MaxPayloadLength() const override;
 
@@ -305,7 +306,7 @@ class ModuleRtpRtcpImpl : public RtpRtcp {
 
   bool LastReceivedXrReferenceTimeInfo(RtcpReceiveTimeInfo* info) const;
 
-  int32_t BoundingSet(bool* tmmbr_owner, TMMBRSet* bounding_set_rec);
+  int32_t BoundingSet(bool* tmmbr_owner, TMMBRSet* bounding_set_rec) override;
 
   void BitrateSent(uint32_t* total_rate,
                    uint32_t* video_rate,
@@ -320,10 +321,9 @@ class ModuleRtpRtcpImpl : public RtpRtcp {
   StreamDataCountersCallback* GetSendChannelRtpStatisticsCallback()
       const override;
 
-  void OnReceivedNACK(const std::list<uint16_t>& nack_sequence_numbers);
-  void OnReceivedRtcpReportBlocks(const ReportBlockList& report_blocks);
-
-  void OnRequestSendReport();
+  void OnReceivedNACK(const std::list<uint16_t>& nack_sequence_numbers) override;
+  void OnReceivedRtcpReportBlocks(const ReportBlockList& report_blocks) override;
+  void OnRequestSendReport() override;
 
  protected:
   bool UpdateRTCPReceiveInformationTimers();

@@ -349,7 +349,7 @@ RTCPSender::FeedbackState ModuleRtpRtcpImpl::GetFeedbackState() {
                        rtx_stats.transmitted.packets;
   state.media_bytes_sent = rtp_stats.transmitted.payload_bytes +
                            rtx_stats.transmitted.payload_bytes;
-  state.module = this;
+  state.cb = this;
 
   LastReceivedNTP(&state.last_rr_ntp_secs,
                   &state.last_rr_ntp_frac,
