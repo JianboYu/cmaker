@@ -53,6 +53,12 @@ int32_t main(int32_t argc, char *argv[]) {
   }
   logi("connect vhost/app success\n");
 
+  if (protocol_rtmp_publish_stream(rtmp) != 0) {
+    loge("publish stream failed.");
+    goto rtmp_destroy;
+  }
+  logi("publish stream success");
+
   while (1) {
     int32_t len = 0;
     int32_t readed = fscanf(fp_stream_len, "%d\n", &len);

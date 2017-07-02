@@ -479,7 +479,7 @@ bool thread_loop(void *ctx) {
 
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(33);
+  os_msleep(33 - 5);
   return true;
 }
 

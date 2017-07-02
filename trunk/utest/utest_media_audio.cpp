@@ -40,6 +40,12 @@ const int kNumFrames = 30;
 const int kPayloadType = 97;
 const int kRtxPayloadType = 98;
 
+static int32_t gs_audio_samplerate = 44100;
+static int32_t gs_audio_chns = 2;
+
+static int32_t gs_audio_bitrate = 32000;
+static int32_t gs_audio_frame_time = 10;//10ms
+
 void DumpRTPHeader(uint8_t *rtp_header) {
   log_verbose("tag", "V=%d\n", (*rtp_header & 0xc0) >> 6);
   log_verbose("tag", "P=%d\n", (*rtp_header & 0x20) >> 5);
@@ -317,10 +323,25 @@ int32_t aac_add_adts_header(uint32_t frame_len, uint8_t *dst) {
     memcpy(dst_cur, &data, 1);
     dst_cur++;
 
+    /*int avpriv_mpeg4audio_sample_rates[] = {
+            96000, 88200, 64000, 48000, 44100, 32000,
+                    24000, 22050, 16000, 12000, 11025, 8000, 7350
+    };
+    channel_configuration: 表示声道数chanCfg
+    0: Defined in AOT Specifc Config
+    1: 1 channel: front-center
+    2: 2 channels: front-left, front-right
+    3: 3 channels: front-center, front-left, front-right
+    4: 4 channels: front-center, front-left, front-right, back-center
+    5: 5 channels: front-center, front-left, front-right, back-left, back-right
+    6: 6 channels: front-center, front-left, front-right, back-left, back-right, LFE-channel
+    7: 8 channels: front-center, front-left, front-right, side-left, side-right, back-left, back-right, LFE-channel
+    8-15: Reserved
+    */
     const uint8_t kProfileCode = OMX_AUDIO_AACObjectLC - 1;
-    uint8_t kSampleFreqIndex = 5;/*32kHZ*/
+    uint8_t kSampleFreqIndex = gs_audio_samplerate == 32000 ? 5 : 4;
     const uint8_t kPrivateStream = 0;
-    const uint8_t kChannelConfigCode = 1/*1: mono 2: stero*/;
+    const uint8_t kChannelConfigCode = gs_audio_chns;/*1: mono 2: stero*/;
     data = (kProfileCode << 6);
     data |= (kSampleFreqIndex << 2);
     data |= (kPrivateStream << 1);
@@ -368,7 +389,7 @@ bool audio_encoder_loop(void *ctx) {
   OMX_BUFFERHEADERTYPE* pBuffer = (OMX_BUFFERHEADERTYPE*)pdata;
   if (pBuffer) {
     pBuffer->nFlags = 0;
-    pBuffer->nFilledLen = 32 * audio_frame_time * sizeof(int16_t) * 1;
+    pBuffer->nFilledLen = (gs_audio_samplerate* gs_audio_frame_time /1000) * sizeof(int16_t) * gs_audio_chns;
     pBuffer->nOffset = 0;
     pBuffer->nTimeStamp = (omx_ctx->ts * 1000);
 
@@ -404,7 +425,7 @@ bool audio_encoder_loop(void *ctx) {
       }
 
       logw("Buffer flag: %08x\n", pBuffer->nFlags);
-      uint32_t writed = fwrite(pBuffer->pBuffer, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
+      uint32_t writed = fwrite(pBuffer->pBuffer + pBuffer->nOffset, 1, pBuffer->nFilledLen, omx_ctx->fp_encoded);
       CHECK_EQ(writed, pBuffer->nFilledLen);
       writed = fprintf(omx_ctx->fp_len, "%d\n", (int32_t)pBuffer->nFilledLen);
       CHECK_GT(writed, (uint32_t)0);
@@ -440,7 +461,7 @@ bool audio_encoder_loop(void *ctx) {
       //logi("Buffer flags: %08x\n", pBuffer->nFlags);
       int32_t ret = omx_ctx->rtp_sender->SendOutgoingData(
                      kAudioFrameSpeech,
-                     kPayloadType, (pBuffer->nTimeStamp*32)/1000, -1/*capture_time_ms*/,
+                     kPayloadType, (pBuffer->nTimeStamp/10000*gs_audio_samplerate/100), -1/*capture_time_ms*/,
                      pBuffer->pBuffer + pBuffer->nOffset,
                      pBuffer->nFilledLen, NULL/*&fragment*/, NULL);
       CHECK_EQ(0, ret);
@@ -453,7 +474,7 @@ bool audio_encoder_loop(void *ctx) {
     logv("FillThisBuffer: %p\n", pBuffer);
     CHECK_EQ(oRet, OMX_ErrorNone);
   }
-  os_msleep(audio_frame_time);
+  os_msleep(gs_audio_frame_time-1);
   return true;
 }
 
@@ -506,13 +527,13 @@ int32_t main(int argc, char *argv[]) {
   omx_ctx->thread = os::Thread::Create(audio_encoder_loop, omx_ctx);
   omx_ctx->ts = 3600;
   omx_ctx->encode = true;
-  omx_ctx->fp = fopen("32k-mono-16bw-all-your-life.pcm", "r");
-  omx_ctx->fp_encoded = fopen("32k-mono-16width.aac", "w+");
-  omx_ctx->fp_len = fopen("32k-mono-16width-aac.len", "w+");
+  omx_ctx->fp = fopen("44k-stereo-16bw-all-your-life.pcm", "r");
+  omx_ctx->fp_encoded = fopen("44k-stereo-16width.aac", "w+");
+  omx_ctx->fp_len = fopen("44k-stereo-16width-aac.len", "w+");
 
-  OMX_U32 numChannels = 1;
-  OMX_U32 sampleRate = 32000;
-  OMX_U32 bitRate = 32000;
+  OMX_U32 numChannels = gs_audio_chns;
+  OMX_U32 sampleRate = gs_audio_samplerate;
+  OMX_U32 bitRate = gs_audio_bitrate;
 
   OMX_CALLBACKTYPE omx_cb;
   omx_cb.EventHandler = sEventHandler;
@@ -588,7 +609,7 @@ int32_t main(int argc, char *argv[]) {
   oRet = OMX_GetParameter(pHandle, OMX_IndexParamAudioAac, &profile);
   CHECK_EQ(oRet, OMX_ErrorNone);
   profile.nChannels = numChannels;
-  profile.eChannelMode = OMX_AUDIO_ChannelModeMono;//OMX_AUDIO_ChannelModeStereo
+  profile.eChannelMode = gs_audio_samplerate == 1 ? OMX_AUDIO_ChannelModeMono : OMX_AUDIO_ChannelModeStereo;
   profile.nSampleRate = sampleRate;
   profile.nBitRate = bitRate;
   profile.nAudioBandWidth = 0;
@@ -605,7 +626,7 @@ int32_t main(int argc, char *argv[]) {
   CHECK_EQ(oRet, OMX_ErrorNone);
 
   for (int32_t i = 0; i < 4; ++i) {
-    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, 32 * 110 * sizeof(int16_t) * 2);
+    oRet = OMX_AllocateBuffer(pHandle, &omx_ctx->inBuffer[i], 0, NULL, (gs_audio_samplerate* gs_audio_frame_time /1000) * sizeof(int16_t)* 2);
     CHECK_EQ(oRet, OMX_ErrorNone);
     CHECK(omx_ctx->inBuffer[i]);
     logv("Port: %d index: %d Allocate Buffer: %p len: %d\n",

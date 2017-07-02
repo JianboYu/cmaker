@@ -213,10 +213,136 @@ User also can send one by one:
 int32_t protocol_h264_write_raw_frames(protocol_rtmp_t rtmp,
     uint8_t* frames, int32_t frames_size, uint32_t dts, uint32_t pts);
 
-int32_t protocol_rtmp_write_packet(protocol_rtmp_t rtmp,
-    char type, u_int32_t timestamp, char* data, int size
+/**
+* E.4.1 FLV Tag, page 75
+*/
+// 8 = audio
+#define SRS_RTMP_TYPE_AUDIO 8
+// 9 = video
+#define SRS_RTMP_TYPE_VIDEO 9
+// 18 = script data
+#define SRS_RTMP_TYPE_SCRIPT 18
+/**
+* read a audio/video/script-data packet from rtmp stream.
+* @param type, output the packet type, macros:
+*            SRS_RTMP_TYPE_AUDIO, FlvTagAudio
+*            SRS_RTMP_TYPE_VIDEO, FlvTagVideo
+*            SRS_RTMP_TYPE_SCRIPT, FlvTagScript
+*            otherswise, invalid type.
+* @param timestamp, in ms, overflow in 50days
+* @param data, the packet data, according to type:
+*             FlvTagAudio, @see "E.4.2.1 AUDIODATA"
+*            FlvTagVideo, @see "E.4.3.1 VIDEODATA"
+*            FlvTagScript, @see "E.4.4.1 SCRIPTDATA"
+* @param size, size of packet.
+* @return the error code. 0 for success; otherwise, error.
+*
+* @remark: for read, user must free the data.
+* @remark: for write, user should never free the data, even if error.
+* @example /trunk/research/librtmp/srs_play.c
+* @example /trunk/research/librtmp/srs_publish.c
+*
+* @return 0, success; otherswise, failed.
+*/
+int32_t protocol_rtmp_read_packet(protocol_rtmp_t rtmp,
+    char* type, uint32_t* timestamp, char** data, int32_t* size
 );
 
+int32_t protocol_rtmp_write_packet(protocol_rtmp_t rtmp,
+    char type, uint32_t timestamp, char* data, int32_t size
+);
+
+/*************************************************************
+**************************************************************
+* audio raw codec
+**************************************************************
+*************************************************************/
+/**
+* write an audio raw frame to srs.
+* not similar to h.264 video, the audio never aggregated, always
+* encoded one frame by one, so this api is used to write a frame.
+*
+* @param sound_format Format of SoundData. The following values are defined:
+*               0 = Linear PCM, platform endian
+*               1 = ADPCM
+*               2 = MP3
+*               3 = Linear PCM, little endian
+*               4 = Nellymoser 16 kHz mono
+*               5 = Nellymoser 8 kHz mono
+*               6 = Nellymoser
+*               7 = G.711 A-law logarithmic PCM
+*               8 = G.711 mu-law logarithmic PCM
+*               9 = reserved
+*               10 = AAC
+*               11 = Speex
+*               14 = MP3 8 kHz
+*               15 = Device-specific sound
+*               Formats 7, 8, 14, and 15 are reserved.
+*               AAC is supported in Flash Player 9,0,115,0 and higher.
+*               Speex is supported in Flash Player 10 and higher.
+* @param sound_rate Sampling rate. The following values are defined:
+*               0 = 5.5 kHz
+*               1 = 11 kHz
+*               2 = 22 kHz
+*               3 = 44 kHz
+* @param sound_size Size of each audio sample. This parameter only pertains to
+*               uncompressed formats. Compressed formats always decode
+*               to 16 bits internally.
+*               0 = 8-bit samples
+*               1 = 16-bit samples
+* @param sound_type Mono or stereo sound
+*               0 = Mono sound
+*               1 = Stereo sound
+* @param timestamp The timestamp of audio.
+*
+* @example /trunk/research/librtmp/srs_aac_raw_publish.c
+* @example /trunk/research/librtmp/srs_audio_raw_publish.c
+*
+* @remark for aac, the frame must be in ADTS format. 
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75, 1.A.2.2 ADTS
+* @remark for aac, only support profile 1-4, AAC main/LC/SSR/LTP,
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 23, 1.5.1.1 Audio object type
+*
+* @see https://github.com/ossrs/srs/issues/212
+* @see E.4.2.1 AUDIODATA of video_file_format_spec_v10_1.pdf
+*
+* @return 0, success; otherswise, failed.
+*/
+int32_t protocol_audio_write_raw_frame(protocol_rtmp_t rtmp,
+    char sound_format, char sound_rate, char sound_size, char sound_type,
+    char* frame, int32_t frame_size, uint32_t timestamp
+);
+
+/**
+* whether aac raw data is in adts format,
+* which bytes sequence matches '1111 1111 1111'B, that is 0xFFF.
+* @param aac_raw_data the input aac raw data, a encoded aac frame data.
+* @param ac_raw_size the size of aac raw data.
+*
+* @reamrk used to check whether current frame is in adts format.
+*       @see aac-mp4a-format-ISO_IEC_14496-3+2001.pdf, page 75, 1.A.2.2 ADTS
+* @example /trunk/research/librtmp/srs_aac_raw_publish.c
+*
+* @return 0 false; otherwise, true.
+*/
+bool protocol_aac_is_adts(char* aac_raw_data, int32_t ac_raw_size);
+
+/**
+* parse the adts header to get the frame size,
+* which bytes sequence matches '1111 1111 1111'B, that is 0xFFF.
+* @param aac_raw_data the input aac raw data, a encoded aac frame data.
+* @param ac_raw_size the size of aac raw data.
+*
+* @return failed when <=0 failed; otherwise, ok.
+*/
+int32_t protocol_aac_adts_frame_size(char* aac_raw_data, int32_t ac_raw_size);
+
+/**
+* print the rtmp packet, use srs_human_trace/srs_human_verbose for packet,
+* and use srs_human_raw for script data body.
+* @return an error code for parse the timetstamp to dts and pts.
+ */
+int32_t protocol_human_print_rtmp_packet(char type, uint32_t timestamp, char* data, int32_t size);
 
 #ifdef __cplusplus
 }
